@@ -11,64 +11,6 @@
 #define SETPREF(x, y, z) SETDESC (r_config_set (core->config, x, y), z)
 
 
-void usage() {
-    eprintf ("Usage: pde[ ?ac] <func> plugin for radeco\n");
-    eprintf ("| pde <func>   decompile current function\n");
-    eprintf ("| pde?         show this help\n");
-    eprintf ("| pdea <func>  analyze current function with radeco\n");
-    eprintf ("| pdec         send information to radeco\n");
-    eprintf ("| pder <cmd>   send <cmd> to radeco directly\n");
-    eprintf ("| pdes         respawn radeco subprocess\n");
-}
-
-
-// int cmd_pde(const char *input) {
-//     static RSocketProc *radeco_proc = NULL;
-//     if (!radeco_proc) {
-//         radeco_proc = spawn_radeco();
-//         if (!radeco_proc) {
-//             eprintf("Spawning radeco process failed\n");
-//             return true;
-//         }
-//     }
-
-//     if (!input) {
-//         return true;
-//     }
-//     const char *query = input + 1;
-//     switch (input[0]) {
-//     case ' ':
-//         proc_sendf (radeco_proc, "decompile %s\n", query);
-//         read_radeco_output (radeco_proc);
-//         break;
-//     case 'a':
-//         proc_sendf (radeco_proc, "analyze %s\n", query);
-//         read_radeco_output (radeco_proc);
-//         break;
-//     case 'c':
-//         proc_sendf (radeco_proc, "connect http://localhost:%u\n", PORT);
-//         read_radeco_output (radeco_proc);
-//         break;
-//     case 'r':
-//         proc_sendf (radeco_proc, "%s\n", query);
-//         read_radeco_output (radeco_proc);
-//         break;
-//     case 's':
-//         radeco_proc = spawn_radeco ();
-//         if (!radeco_proc) {
-//             eprintf ("Spawning radeco process failed\n");
-//             return true;
-//         }
-//         break;
-//     case '\0':
-//     case '?':
-//     default:
-//         usage ();
-//     }
-//     return true;
-// }
-
-
 
 
 
