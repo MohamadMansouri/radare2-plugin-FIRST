@@ -408,7 +408,7 @@ void set_hashes(RCore *core)
 
 void set_token()
 {
-  _api_key = "b3fcf0dd-cab7-4610-96c3-7ff08b0252e3";
+  _api_key = "";
 }
 
 char* get_token(){
