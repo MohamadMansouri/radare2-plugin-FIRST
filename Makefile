@@ -7,11 +7,13 @@ PLUGNAME=first
 TARGET=$(PLUGNAME).$(LIBEXT)
 
 all:
-	$(CC) $(CFLAGS) $(LDFLAGS) -shared -fPIC utils.c first.c jsmn.c -o first.$(LIBEXT)
+	$(CC) $(CFLAGS) $(LDFLAGS) -shared -fPIC utils.c first.c jsmn.c ini.c -o first.$(LIBEXT)
 	$(MAKE) install
 
 
 install:
+	mkdir -p $(HOME)/.config/first
+	cp -rf first.config $(HOME)/.config/first/  
 	mkdir -p $(PLUGDIR)
 	rm -rf $(PLUGDIR)/$(TARGET)
 	cp -rf $(TARGET) $(PLUGDIR)/

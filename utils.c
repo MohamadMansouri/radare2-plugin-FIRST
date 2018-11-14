@@ -7,18 +7,13 @@
 
 #include "utils.h"
 #include "jsmn.h"
-// static char* _api_key = "b3fcf0dd-cab7-4610-96c3-7ff08b0252e3";
+#include "ini.h"
 
-FS_config f_server_config ={
-  ._server = "first.talosintelligence.com",
-  ._port = 443,
-  ._protocol = "https",
-  ._verify = false,
-  ._auth = false,
-}; 
+
+
+FS_config f_server_config;
 
 static bool checkedin= false;
-static char* _api_key;
 binary_info hashes;
 const char* path[10] = {"api/test_connection", "api/sample/checkin","api/metadata/add","api/metadata/history","api/metadata/applied","api/metadata/unapplied","api/metadata/delete","api/metadata/created","api/metadata/get","api/metadata/scan"};
 CURL *curl;
@@ -240,12 +235,12 @@ bool s_test_connection(){
   jsmn_parser parser;
   jsmn_init(&parser);
 
-  if (_api_key == ""){
+  if (f_server_config._api_key == ""){
     printf("%s\n","No api_key was set" );
     return false;
   }
   else
-    send_g(f_test,_api_key,NULL,data_callback);
+    send_g(f_test,f_server_config._api_key,NULL,data_callback);
     if(response != NULL){
       
       int r = jsmn_parse(&parser, response, strlen(response), token, 3);
@@ -271,7 +266,7 @@ void s_check_in (action act){
     char parms[200];
     sprintf( parms,"md5=%s&crc32=%d&sha1=%s", hashes.f_md5, hashes.f_crc32, hashes.f_sha1);
     checkedin = true;
-    send_p(f_checkin, _api_key, parms , data_callback);
+    send_p(f_checkin, f_server_config._api_key, parms , data_callback);
   }
 
 }
@@ -280,7 +275,7 @@ void s_check_in (action act){
 void s_history(char* metadata_id){ 
   char parms[strlen("metadata=")+24];
   sprintf( parms,"metadata=%s", metadata_id);
-  send_p(f_history, _api_key, parms, data_callback);
+  send_p(f_history, f_server_config._api_key, parms, data_callback);
 }
 
 void s_get(){
@@ -301,7 +296,7 @@ MetadataServer* s_created(){
     char parms[2];
     parms[0] = '/';
     parms[1] = page + '0';
-    send_g(f_created,_api_key,parms,data_callback);
+    send_g(f_created,f_server_config._api_key,parms,data_callback);
 
     
     if (response == NULL){
@@ -353,20 +348,20 @@ void s_scan(Metadata metadata){
 void s_applied(char* metadata_id){
   char parms[150];
   sprintf( parms,"md5=%s&crc32=%d&id=%s", hashes.f_md5, hashes.f_crc32,metadata_id);
-  send_p(f_applied,_api_key, parms, data_callback);
+  send_p(f_applied,f_server_config._api_key, parms, data_callback);
 }
 
 void s_unapplied(char* metadata_id){
   char parms[150];
   sprintf( parms,"md5=%s&crc32=%d&id=%s", hashes.f_md5, hashes.f_crc32,metadata_id);
-  send_p(f_applied,_api_key, parms, data_callback);
+  send_p(f_applied,f_server_config._api_key, parms, data_callback);
 }
 
 
 void s_delete(char* metadata_id){
   char parms[50];
   sprintf( parms,"/%s", metadata_id);
-  send_g(f_delete,_api_key, parms, data_callback);
+  send_g(f_delete,f_server_config._api_key, parms, data_callback);
 } 
 
 
@@ -374,15 +369,60 @@ void s_delete(char* metadata_id){
 
 
 
-//setters and getters
 
-void f_set_config(char* server, uint	port, char* protocol, bool verify, bool auth) 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//setters and getters
+static int handler(void* user, const char* section, const char* name,
+                   const char* value)
 {
-	f_server_config._server = server; 
-	f_server_config._port = port;	
-	f_server_config._protocol = protocol;
-  f_server_config._verify = verify;
-  f_server_config._auth = auth;
+    FS_config* config = (FS_config*)user;
+
+    #define MATCH(s, n) strcmp(section, s) == 0 && strcmp(name, n) == 0
+    if (MATCH("server", "server")) {
+        config->_server = strdup(value);
+    } else if (MATCH("server", "port")) {
+        config->_port = atoi(value);
+    } else if (MATCH("server", "protocol")) {
+        config->_protocol = strdup(value);
+    } else if (MATCH("server", "verify")) {
+        config->_verify = (bool)atoi(value);
+    } else if (MATCH("server", "auth")) {
+        config->_auth = (bool)atoi(value);
+    } else if (MATCH("user", "key")) {
+        config->_api_key = strdup(value);
+    } else {
+        return 0;  /* unknown section/name, error */
+    }
+    return 1;
+}
+
+
+bool f_set_config() 
+{
+  char *homedir = getenv("HOME");
+  homedir = strcat(homedir,"/.config/first/first.config");
+  if (ini_parse(homedir, handler, &f_server_config) < 0) {
+        printf("Can't load configuration file!\n");
+        return 1;
+    }
 }
 
 
@@ -406,11 +446,8 @@ void set_hashes(RCore *core)
   return;
 }
 
-void set_token()
-{
-  _api_key = "";
-}
+
 
 char* get_token(){
-  return _api_key;
+  return f_server_config._api_key;
 }

@@ -24,15 +24,6 @@ f_scan
 } action;
 
 
-// typedef enum hash
-// {
-// 	md5,
-// 	crc32,
-// 	sha1,
-// 	sha256
-	
-// }hash;
-
 typedef struct binary_info{
   char* f_md5;
   char* f_sha1;
@@ -49,6 +40,7 @@ typedef struct Config
 	char* _protocol;
     bool _verify;
     bool _auth;
+    char* _api_key;
 } FS_config;
 
 
@@ -119,7 +111,7 @@ MetadataServer* s_created();
 
 
 // setter and getters
-void  f_set_config(char* server, uint	port, char* protocol, bool verify, bool auth);
+bool  f_set_config();
 void set_token();
 void set_hashes(RCore *core);
 char* get_token();
