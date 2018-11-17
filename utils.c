@@ -18,7 +18,6 @@ binary_info hashes;
 const char* path[10] = {"api/test_connection", "api/sample/checkin","api/metadata/add","api/metadata/history","api/metadata/applied","api/metadata/unapplied","api/metadata/delete","api/metadata/created","api/metadata/get","api/metadata/scan"};
 CURL *curl;
 char* response=NULL;
-RespCreated* resp_created=NULL;
 
 static int jsoneq(const char *json, jsmntok_t *tok, const char *s) {
   if (tok->type == JSMN_STRING && (int) strlen(s) == tok->end - tok->start &&
@@ -27,6 +26,7 @@ static int jsoneq(const char *json, jsmntok_t *tok, const char *s) {
   }
   return -1;
 }
+
 
 
 static
@@ -77,14 +77,14 @@ int debug_response(CURL *handle, curl_infotype type,
   return 0;
 }
 
-void dump_created_metadata(char* r, jsmntok_t* t, int j){
+void dump_created_metadata(char* r, jsmntok_t* t, int j, RespCreated* resp_created){
   for(int i=1;i<=(t->size)*2;i+=2){
 
     if(!jsoneq(r, t+i, "name") && (t+i+1)->type == JSMN_STRING){
       int size = (t+i+1)->end - (t+i+1)->start;
       char* name = (char*) malloc(size);
       if (name == NULL)
-      strncpy(name,r+(t+i+1)->start,(t+i+1)->end - (t+i+1)->start);
+      strncpy(name,r+(t+i+1)->start,size);
       memset(name+size, '\0',1);
       (resp_created->metadata+j)->name = name;
       continue;
@@ -93,7 +93,7 @@ void dump_created_metadata(char* r, jsmntok_t* t, int j){
     if(!jsoneq(r, t+i, "prototype") && (t+i+1)->type == JSMN_STRING){
       int size = (t+i+1)->end - (t+i+1)->start;
       char* prototype = (char*) malloc(size);
-      strncpy(prototype,r+(t+i+1)->start,(t+i+1)->end - (t+i+1)->start);
+      strncpy(prototype,r+(t+i+1)->start,size);
       memset(prototype+size, '\0',1);
       (resp_created->metadata+j)->prototype = prototype;
       continue;
@@ -102,7 +102,7 @@ void dump_created_metadata(char* r, jsmntok_t* t, int j){
     if(!jsoneq(r, t+i, "comment") && (t+i+1)->type == JSMN_STRING){
       int size = (t+i+1)->end - (t+i+1)->start;
       char* comment = (char*) malloc(size);
-      strncpy(comment,r+(t+i+1)->start,(t+i+1)->end - (t+i+1)->start);
+      strncpy(comment,r+(t+i+1)->start,size);
       memset(comment+size, '\0',1);
       (resp_created->metadata+j)->comment = comment;
       continue;
@@ -127,11 +127,11 @@ void dump_created_metadata(char* r, jsmntok_t* t, int j){
     }
   }     
 }
-void dump_created(char* r, jsmntok_t* t){
+RespCreated* dump_created(char* r, jsmntok_t* t){
   int i=1;
-  printf("%s\n", r);
   if (!jsoneq(r, t+i, "failed") && (t+i+1)->type == JSMN_PRIMITIVE && *(r+(t+i+1)->start) == 'f'){
     i+=2;
+    RespCreated* resp_created;
     resp_created = (RespCreated*) malloc(sizeof(RespCreated));
     resp_created->metadata = NULL;
     resp_created->size = 0;
@@ -147,14 +147,16 @@ void dump_created(char* r, jsmntok_t* t){
         resp_created->metadata = (MetadataServer*) malloc(sizeof(MetadataServer)*resp_created->size);
         for(int j=0;j<resp_created->size;j++){
           jsmntok_t* g = (t+i+j+2);
-          dump_created_metadata(r,g,j);
+          dump_created_metadata(r,g,j,resp_created);
           (resp_created->metadata+j)->address=-1;
           (resp_created->metadata+j)->creator=NULL;
           (resp_created->metadata+j)->similarity=0;
         }
       }
+      return resp_created;
     }
   }
+  return NULL;
 }
 
 
@@ -164,7 +166,6 @@ size_t data_callback(void *ptr, size_t size, size_t nmemb, void *stream){
   action act = *(action*)stream;
   long http_code = 0;
   curl_easy_getinfo (curl, CURLINFO_RESPONSE_CODE, &http_code);
-  
   if (http_code == 200)
     response = (char*)ptr;
 
@@ -185,6 +186,9 @@ void send_g(action act, char* token, char* parms, size_t callback(void *ptr, siz
     strcat(url,parms); 
 
   if(curl) {
+    
+    // curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+    // curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION,debug_response);
     curl_easy_setopt(curl, CURLOPT_URL, url);
     curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "Mozilla/5.0");
@@ -205,7 +209,6 @@ void send_g(action act, char* token, char* parms, size_t callback(void *ptr, siz
 void send_p(action act, char* token, char* parms, size_t callback(void *ptr, size_t size, size_t nmemb, void *stream)){
     
     s_check_in(act);
-
     curl = curl_easy_init();
     CURLcode res;
     char url[150];
@@ -234,63 +237,166 @@ bool s_test_connection(){
   jsmntok_t token[3];
   jsmn_parser parser;
   jsmn_init(&parser);
-
-  if (f_server_config._api_key == ""){
-    printf("%s\n","No api_key was set" );
-    return false;
-  }
-  else
-    send_g(f_test,f_server_config._api_key,NULL,data_callback);
-    if(response != NULL){
-      
-      int r = jsmn_parse(&parser, response, strlen(response), token, 3);
-      
-      if (r !=3 || token[0].type != JSMN_OBJECT){
-        printf("Error parsing response from server!\n");
-        return false;
-      }
-      if(!jsoneq(response, &token[1], "status") && !jsoneq(response, &token[2], "connected")){
-      response=NULL;
-      return true;
-        
-      }
+  send_g(f_test,f_server_config._api_key,NULL,data_callback);
+  if(response != NULL){
+    
+    int r = jsmn_parse(&parser, response, strlen(response), token, 3);
+    
+    if (r !=3 || token[0].type != JSMN_OBJECT){
+      response = NULL;
+      return false;
     }
-    return false;
+    if(!jsoneq(response, &token[1], "status") && !jsoneq(response, &token[2], "connected")){
+    response=NULL;
+    return true;
+      
+    }
+  }
+  return false;
 
 } 
 
 void s_check_in (action act){
+  jsmntok_t token[5];
+  jsmn_parser parser;
+  jsmn_init(&parser);
+
   if (checkedin || act == f_test)
     return; 
   else{
-    char parms[200];
+    char parms[strlen("md5=&crc32=&sha1=") + strlen(hashes.f_md5) + sizeof(hashes.f_crc32) + strlen(hashes.f_sha1)];
     sprintf( parms,"md5=%s&crc32=%d&sha1=%s", hashes.f_md5, hashes.f_crc32, hashes.f_sha1);
     checkedin = true;
     send_p(f_checkin, f_server_config._api_key, parms , data_callback);
+   
+    if (response != NULL){
+      int r = jsmn_parse(&parser, response, strlen(response), token, 5);
+      if (r !=5 || token[0].type != JSMN_OBJECT){
+        printf("checkin error: error parsing response from server!\n");
+        response = NULL;
+        checkedin = false;
+        return;
+      }
+
+      if(!jsoneq(response, &token[1], "failed") && token[2].type == JSMN_PRIMITIVE && *(response + token[2].start) == 'f'){
+        response=NULL;
+        return;
+      } 
+      else if(!jsoneq(response, &token[1], "failed") && token[2].type == JSMN_PRIMITIVE && *(response + token[2].start) == 't'){
+        int size = token[4].end - token[4].start;
+        char* error_msg = (char*) malloc(size);
+        strncpy(error_msg,response+token[4].start,size);
+        memset(error_msg+size, '\0',1);
+        printf("checkin error: %s\n",error_msg);
+      }
+      response =NULL;
+      checkedin = false;
+      return;
+    }
+  }
+}
+
+void s_history(char** metadata_id, int size){ 
+  char parms[strlen("metadata=[]") + 27*size + (size-1)];
+  char tmp[28];
+
+  int MAX_history = 10;
+  int ntoken = 5 + (5 + 8*MAX_history)*size;
+  jsmntok_t token[ntoken];
+  jsmn_parser parser;
+  jsmn_init(&parser);
+
+  sprintf( parms,"metadata=[");
+  
+  for(int i=0; i<size ; ++i){
+    if(i > 0){
+      sprintf(tmp,",\"%s\"", metadata_id[i]);
+      strcat( parms,tmp);
+    }
+    else{
+      sprintf(tmp,"\"%s\"", metadata_id[i]);
+      strcat( parms,tmp);
+    }
+  }
+  strcat(parms,"]");
+  send_p(f_history, f_server_config._api_key, parms, data_callback);
+  
+  if (!response){
+    printf("Error receiving response from server!\n");
+    return NULL;
+  }
+  int r = jsmn_parse(&parser, response, strlen(response), token, ntoken);
+  
+  if (token[0].type != JSMN_OBJECT){
+    printf("Error parsing response from server!\n");
+    response = NULL;
+    return NULL;
   }
 
-}
-
-// TODO: modify to an array
-void s_history(char* metadata_id){ 
-  char parms[strlen("metadata=")+24];
-  sprintf( parms,"metadata=%s", metadata_id);
-  send_p(f_history, f_server_config._api_key, parms, data_callback);
-}
-
-void s_get(){
+// TODO: implement the parser of the histoy
+  return NULL;
 
 }
 
-MetadataServer* s_created(){
+void s_get(char** metadata_id, int size){
+  char parms[strlen("metadata=[]") + 27*size + (size-1)];
+  char tmp[28];
+
+  int MAX_history = 10;
+  int ntoken = 5 + (5 + 8*MAX_history)*size;
+  jsmntok_t token[ntoken];
+  jsmn_parser parser;
+  jsmn_init(&parser);
+
+  sprintf( parms,"metadata=[");
+  
+  for(int i=0; i<size ; ++i){
+    if(i > 0){
+      sprintf(tmp,",\"%s\"", metadata_id[i]);
+      strcat( parms,tmp);
+    }
+    else{
+      sprintf(tmp,"\"%s\"", metadata_id[i]);
+      strcat( parms,tmp);
+    }
+  }
+  strcat(parms,"]");
+  send_p(f_get, f_server_config._api_key, parms, data_callback);
+  
+  if (!response){
+    printf("Error receiving response from server!\n");
+    return NULL;
+  }
+  int r = jsmn_parse(&parser, response, strlen(response), token, ntoken);
+  
+  if (token[0].type != JSMN_OBJECT){
+    printf("Error parsing response from server!\n");
+    response = NULL;
+    return NULL;
+  }
+
+// TODO: implement the parser of the get
+  return NULL;
+
+
+}
+
+RespCreated s_created(){
   printf("retreiving created metadata...\n");
   int page = 1;
   int pages = 0;
   int first_time = true;
-  jsmntok_t token[9];
+
+  int ntoken = 9 + 12*20;
+  jsmntok_t token[ntoken];
   jsmn_parser parser;
   jsmn_init(&parser);
 
+  int total_size=0;
+  RespCreated* resp_created;
+  RespCreated metadata_array; 
+  metadata_array.size = 0;
+  metadata_array.metadata = NULL;
   while(first_time || page<=pages){
    
     char parms[2];
@@ -299,30 +405,37 @@ MetadataServer* s_created(){
     send_g(f_created,f_server_config._api_key,parms,data_callback);
 
     
-    if (response == NULL){
+    if (!response){
       printf("Error receiving response from server!\n");
       break;
     }
     
-    int r = jsmn_parse(&parser, response, strlen(response), token, 9);
+    int r = jsmn_parse(&parser, response, strlen(response), token, ntoken);
     
-    if (r !=9 || token[0].type != JSMN_OBJECT){
+    if (token[0].type != JSMN_OBJECT){
       printf("Error parsing response from server!\n");
+      response = NULL;
       break;
     }
 
-    dump_created(response,token);
+    resp_created = dump_created(response,token);
       
     if (resp_created == NULL){
       printf("Malformed response!\n");
+      response = NULL;
       break;
     }
     else{
       if(first_time)
         pages = resp_created->pages;
       
-      if(resp_created->metadata != NULL && resp_created->size){
-        printf("found metadata\n");
+      if(resp_created->metadata && resp_created->size){
+        total_size += resp_created->size;
+        metadata_array.metadata = (MetadataServer*)realloc(metadata_array.metadata,sizeof(MetadataServer)*total_size);
+        if (metadata_array.metadata){
+          memcpy((metadata_array.metadata)+ metadata_array.size , resp_created->metadata , resp_created->size);
+          metadata_array.size = total_size;
+        }
       }
     }
     page++;
@@ -330,11 +443,11 @@ MetadataServer* s_created(){
       first_time =false;
     
     free(resp_created);       
-    response =NULL;
+    response = NULL;
 
 
   }
-  return NULL;
+  return metadata_array;
 }
 
 void s_add(Metadata metadata){
@@ -345,23 +458,93 @@ void s_scan(Metadata metadata){
   
 }
 
-void s_applied(char* metadata_id){
-  char parms[150];
+bool s_applied(char* metadata_id){
+  int ntoken = 5;
+  jsmntok_t token[ntoken];
+  jsmn_parser parser;
+  jsmn_init(&parser);
+  
+  char parms[strlen("md5=&crc32=&id=") + strlen(hashes.f_md5) + strlen(metadata_id) + sizeof(hashes.f_crc32)];
   sprintf( parms,"md5=%s&crc32=%d&id=%s", hashes.f_md5, hashes.f_crc32,metadata_id);
+
   send_p(f_applied,f_server_config._api_key, parms, data_callback);
+
+    if (!response){
+      printf("applied : error receiving response from server!\n");
+      response = NULL;
+      return false;
+    }
+
+  int r = jsmn_parse(&parser, response, strlen(response), token, ntoken);
+  if (r !=ntoken || token[0].type != JSMN_OBJECT){
+    printf("applied: error parsing response from server!\n");
+    response = NULL;
+    return false;
+  }
+  if(!jsoneq(response, &token[1], "failed") && token[2].type == JSMN_PRIMITIVE && *(response + token[2].start) == 'f' && !jsoneq(response, &token[3], "results")  && token[4].type == JSMN_PRIMITIVE && *(response + token[4].start) == 't'){
+    response=NULL;
+    return true;
+  }
+
+  return false;
+
 }
 
-void s_unapplied(char* metadata_id){
-  char parms[150];
+bool s_unapplied(char* metadata_id){
+  int ntoken = 5;
+  jsmntok_t token[ntoken];
+  jsmn_parser parser;
+  jsmn_init(&parser);
+
+  char parms[strlen("md5=&crc32=&id=") + strlen(hashes.f_md5) + strlen(metadata_id) + sizeof(hashes.f_crc32)];
   sprintf( parms,"md5=%s&crc32=%d&id=%s", hashes.f_md5, hashes.f_crc32,metadata_id);
-  send_p(f_applied,f_server_config._api_key, parms, data_callback);
+
+
+  send_p(f_unapplied,f_server_config._api_key, parms, data_callback);
+
+  int r = jsmn_parse(&parser, response, strlen(response), token, ntoken);
+  if (r !=ntoken || token[0].type != JSMN_OBJECT){
+    printf("applied: error parsing response from server!\n");
+    response = NULL;
+    return false;
+  }
+  if(!jsoneq(response, &token[1], "failed") && token[2].type == JSMN_PRIMITIVE && *(response + token[2].start) == 'f' && !jsoneq(response, &token[3], "results")  && token[4].type == JSMN_PRIMITIVE && *(response + token[4].start) == 't'){
+    response=NULL;
+    return true;
+  }
+
+  return false;
 }
 
 
-void s_delete(char* metadata_id){
-  char parms[50];
+bool s_delete(char* metadata_id){
+
+  int ntoken = 5;
+  jsmntok_t token[ntoken];
+  jsmn_parser parser;
+  jsmn_init(&parser);
+
+  char parms[strlen(metadata_id)+1];
   sprintf( parms,"/%s", metadata_id);
   send_g(f_delete,f_server_config._api_key, parms, data_callback);
+  if (!response){
+      printf("delete : error receiving response from server!\n");
+      response = NULL;
+      return false;
+    }
+
+  int r = jsmn_parse(&parser, response, strlen(response), token, ntoken);
+  if (r !=ntoken || token[0].type != JSMN_OBJECT){
+    printf("delete: error parsing response from server!\n");
+    response = NULL;
+    return false;
+  }
+  if(!jsoneq(response, &token[1], "failed") && token[2].type == JSMN_PRIMITIVE && *(response + token[2].start) == 'f' && !jsoneq(response, &token[3], "deleted")  && token[4].type == JSMN_PRIMITIVE && *(response + token[4].start) == 't'){
+    response=NULL;
+    return true;
+  }
+
+  return false;
 } 
 
 
@@ -417,8 +600,11 @@ static int handler(void* user, const char* section, const char* name,
 
 bool f_set_config() 
 {
-  char *homedir = getenv("HOME");
+  char *homedir = NULL;
+  homedir = (char*)malloc(strlen(getenv("HOME"))+ strlen("/root/.config/first/first.config"));
+  strcpy(homedir,getenv("HOME"));
   homedir = strcat(homedir,"/.config/first/first.config");
+
   if (ini_parse(homedir, handler, &f_server_config) < 0) {
         printf("Can't load configuration file!\n");
         return 1;
@@ -450,4 +636,53 @@ void set_hashes(RCore *core)
 
 char* get_token(){
   return f_server_config._api_key;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+char* get_arch(RCore* core){
+  char bits[3] = "32";
+  char* arch = NULL;
+
+  RBinInfo* bin = NULL;
+  bin = r_bin_get_info(core->bin);
+
+  if(bin){
+    if (bin->bits == 64)
+      strcpy(bits,"64");
+    arch = malloc(strlen(bin->arch)+2);
+    if (!arch)
+      return NULL;
+    strcpy(arch, bin->arch);
+    
+    if (strstr(arch,"x86")){
+      strcpy(arch, "intel");
+      strcat(arch,bits);
+    }
+    else if (strstr(arch,"arm")){
+      strcpy(arch, "arm");
+      strcat(arch,bits);
+    }
+    else if (strstr(arch,"sparc"))
+      strcpy(arch, "sparc");
+    else if (strstr(arch,"ppc"))
+      strcpy(arch, "ppc");
+    
+    return arch;    
+  
+
+  }
+    
+  return NULL;
 }

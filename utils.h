@@ -10,6 +10,7 @@
 #include <string.h>
 #include <curl/curl.h>
 
+
 typedef enum action {
 f_test,
 f_checkin,
@@ -88,20 +89,19 @@ typedef struct RespCreated
 }RespCreated;
 
 
-
 // communication with server
 void send_g(action act, char* token, char* parms, size_t callback(void *ptr, size_t size, size_t nmemb, void *stream));
 void send_p(action act, char* token, char* parms, size_t callback(void *ptr, size_t size, size_t nmemb, void *stream));
 bool s_test_connection();
 void s_check_in(action act);
 void s_add(Metadata metadata);
-void s_history(char* metadata_id);
-void s_applied(char* metadata_id);
-void s_unapplied(char* metadata_id);
-void s_delete(char* metadata_id);
-void s_get();
+void s_history(char** metadata_id, int size);
+bool s_applied(char* metadata_id);
+bool s_unapplied(char* metadata_id);
+bool s_delete(char* metadata_id);
+void s_get(char** metadata_id, int size);
 void s_scan(Metadata metadata);
-MetadataServer* s_created();
+RespCreated s_created();
 
 
 
@@ -115,4 +115,17 @@ bool  f_set_config();
 void set_token();
 void set_hashes(RCore *core);
 char* get_token();
+
+
+
+
+
+
+
+
+
+
+
+char* get_arch(RCore* core);
+
 #endif

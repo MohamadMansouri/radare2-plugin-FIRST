@@ -11,62 +11,96 @@
 #define SETPREF(x, y, z) SETDESC (r_config_set (core->config, x, y), z)
 
 
-void usage() {
-    eprintf ("Usage: pde[ ?ac] <func> plugin for radeco\n");
-    eprintf ("| pde <func>   decompile current function\n");
-    eprintf ("| pde?         show this help\n");
-    eprintf ("| pdea <func>  analyze current function with radeco\n");
-    eprintf ("| pdec         send information to radeco\n");
-    eprintf ("| pder <cmd>   send <cmd> to radeco directly\n");
-    eprintf ("| pdes         respawn radeco subprocess\n");
+
+
+
+static const char *help_msg_Fst[] = {
+"Usage:", "Fst[?asug]", "FIRST plugin",
+"Fst", "", "test connection to server",
+"Fst?", "", "show this help",
+"Fsta", "[func]", "add function to FIRST",
+"Fstaa", "", "add all functions to FIRST",
+"Fstap", "[id]", "apply function metadata",
+"Fstu", "[id]", "unapply function metadata",
+"Fstg", "[id]", "get function metadata",
+"Fstgc", "[id]", "get created function metadata",
+"Fstgh", "[id]", "get history function metadata",
+"Fsts", "[func]", "scan for similar functions in FIRST",
+"Fstsa", "", "scan all functions for similar functions in FIRST",
+NULL
+};
+
+
+
+int cmd_fst(RCore* core, const char *input) {
+
+
+    if (!input) {
+        return true;
+    }
+    switch (input[0]) {
+    case 'a':
+        switch(input[1]){
+        case 'a':
+            eprintf("add all\n");
+            break;
+        case '\0':
+            eprintf("add function\n");
+            break;
+        case 'p':
+            eprintf("apply metadata\n");
+            break;
+        default:
+            r_core_cmd_help(core,help_msg_Fst);
+        }
+        break;
+    case 's':
+        switch(input[1]){
+        case 'a':
+            eprintf("scan all\n");
+            break;
+        case '\0':
+            eprintf("scan function\n");
+            break;
+        default:
+            r_core_cmd_help(core,help_msg_Fst);
+        }
+        break;
+    case 'u':
+        eprintf("unapply metadata\n");
+        break;
+    case 'g':
+        switch(input[1]){
+            case 'c':
+                eprintf("get created\n");
+                break;
+            case 'h':
+                eprintf("get history\n");
+                break;
+            case '\0':
+                eprintf("get metadata\n");
+                break;
+            default:
+                r_core_cmd_help(core,help_msg_Fst);
+        }
+        break;
+    case '\0':
+        if(s_test_connection())
+            eprintf("You are connected to FIRST server...\n");
+        else{
+            char *homedir = NULL;
+            homedir = (char*)malloc(strlen(getenv("HOME"))+ strlen("/root/.config/first/first.config"));
+            strcpy(homedir,getenv("HOME"));
+            homedir = strcat(homedir,"/.config/first/first.config");
+            eprintf("Problem connecting to FIRST server... Check the configuration file at %s\n", homedir);
+        }
+        break;
+    case '?':
+    default:
+        r_core_cmd_help(core,help_msg_Fst);
+    }
+    return true;
 }
-
-
-// int cmd_pde(const char *input) {
-//     static RSocketProc *radeco_proc = NULL;
-//     if (!radeco_proc) {
-//         radeco_proc = spawn_radeco();
-//         if (!radeco_proc) {
-//             eprintf("Spawning radeco process failed\n");
-//             return true;
-//         }
-//     }
-
-//     if (!input) {
-//         return true;
-//     }
-//     const char *query = input + 1;
-//     switch (input[0]) {
-//     case ' ':
-//         proc_sendf (radeco_proc, "decompile %s\n", query);
-//         read_radeco_output (radeco_proc);
-//         break;
-//     case 'a':
-//         proc_sendf (radeco_proc, "analyze %s\n", query);
-//         read_radeco_output (radeco_proc);
-//         break;
-//     case 'c':
-//         proc_sendf (radeco_proc, "connect http://localhost:%u\n", PORT);
-//         read_radeco_output (radeco_proc);
-//         break;
-//     case 'r':
-//         proc_sendf (radeco_proc, "%s\n", query);
-//         read_radeco_output (radeco_proc);
-//         break;
-//     case 's':
-//         radeco_proc = spawn_radeco ();
-//         if (!radeco_proc) {
-//             eprintf ("Spawning radeco process failed\n");
-//             return true;
-//         }
-//         break;
-//     case '\0':
-//     case '?':
-//     default:
-//         usage ();
-//     }
-//     return true;
-// }
 
 
 
@@ -81,17 +115,31 @@ int cmd(void *user, const char *input) {
     if (strncmp ("Fst", input, 3)) {
         return false;
     }
+    cmd_fst(core,input+3);
+
+    // RAnalFunction *fcn = NULL;
+    // RListIter *iter;
+    // fcn = r_anal_fcn_find_name(core->anal,"entry0");
+    // r_list_foreach (core->anal->fcns, iter, fcn) {
+    //     if(fcn)
+    //         printf("%d\n", fcn->addr);
+    // }
+
+     // printf("%s\n",  get_arch(core));
+    // set_hashes(core);
     
-    set_hashes(core);
-    char *homedir = getenv("HOME");
-    printf("%s\n",homedir );
+
     // printf("%s\n", r_core_cmd_str (core, "ph md5"));
 
     // s_test_connection();
     // history("123456789012345678901234");
     // SETPREF ("http.log", "false", "Show HTTP requests processed");
 
-    printf("%d\n", s_test_connection());
+    // printf("%d\n", s_test_connection());
+    // RespCreated sm_array = s_created();
+    // printf("%d\n",sm_array.size );
+    // char* m[3] = {"1234567890123456789012345", "1234567890123456789012345","1234567890123456789012345"};
+    // s_history(m,3);
     return true;
 }
 
@@ -99,9 +147,17 @@ int init(void *user, const char *_input) {
     RCmd *rcmd = (RCmd*) user;
     RCore *core = (RCore *) rcmd->data;
     RCoreAutocomplete *Fst = r_core_autocomplete_add (core->autocomplete, "Fst", R_CORE_AUTOCMPLT_DFLT, true);
-    r_core_autocomplete_add (Fst, "--version", R_CORE_AUTOCMPLT_OPTN, true);
-    
+    // r_core_autocomplete_add (Fst, "Fsta", R_CORE_AUTOCMPLT_OPTN, true);
+    // r_core_autocomplete_add (Fst, "Fstaa", R_CORE_AUTOCMPLT_OPTN, true);
+    // r_core_autocomplete_add (Fst, "Fstap", R_CORE_AUTOCMPLT_OPTN, true);
+    // r_core_autocomplete_add (Fst, "Fstg", R_CORE_AUTOCMPLT_OPTN, true);
+    // r_core_autocomplete_add (Fst, "Fstgh", R_CORE_AUTOCMPLT_OPTN, true);
+    // r_core_autocomplete_add (Fst, "Fstgc", R_CORE_AUTOCMPLT_OPTN, true);
+    // r_core_autocomplete_add (Fst, "Fsts", R_CORE_AUTOCMPLT_OPTN, true);
+    // r_core_autocomplete_add (Fst, "Fstsa", R_CORE_AUTOCMPLT_OPTN, true);
+    // r_core_autocomplete_add (Fst, "Fstu", R_CORE_AUTOCMPLT_OPTN, true);
     f_set_config();
+    
 
     return true; };
 
