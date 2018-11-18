@@ -115,31 +115,9 @@ int cmd(void *user, const char *input) {
     if (strncmp ("Fst", input, 3)) {
         return false;
     }
+
     cmd_fst(core,input+3);
 
-    // RAnalFunction *fcn = NULL;
-    // RListIter *iter;
-    // fcn = r_anal_fcn_find_name(core->anal,"entry0");
-    // r_list_foreach (core->anal->fcns, iter, fcn) {
-    //     if(fcn)
-    //         printf("%d\n", fcn->addr);
-    // }
-
-     // printf("%s\n",  get_arch(core));
-    // set_hashes(core);
-    
-
-    // printf("%s\n", r_core_cmd_str (core, "ph md5"));
-
-    // s_test_connection();
-    // history("123456789012345678901234");
-    // SETPREF ("http.log", "false", "Show HTTP requests processed");
-
-    // printf("%d\n", s_test_connection());
-    // RespCreated sm_array = s_created();
-    // printf("%d\n",sm_array.size );
-    // char* m[3] = {"1234567890123456789012345", "1234567890123456789012345","1234567890123456789012345"};
-    // s_history(m,3);
     return true;
 }
 

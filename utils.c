@@ -686,3 +686,71 @@ char* get_arch(RCore* core){
     
   return NULL;
 }
+
+char* get_signature(RCore* core, const RAnalFunction* fcn){
+  if(!fcn)
+    return NULL;
+  char address[18];
+  sprintf(address,"p8 $FS @0x%08x", fcn->addr);
+  return r_core_cmd_str(core,address);
+}
+
+
+char** get_apis(RCore* core, RAnalFunction* fcn, int* size){
+  if (!fcn)
+    return NULL;
+  int i=0;
+  
+  RBinInfo *info = r_bin_get_info (core->bin);
+  RBinObject *obj = r_bin_cur_object (core->bin);
+  bool lit = info ? info->has_lit: false;
+  int va = core->io->va || core->io->debug;
+
+  RListIter *iter;
+  RBinImport *imp;
+  if (!obj) {
+    return NULL;
+  }
+  char** imports = (char**)malloc(sizeof(char*)*obj->imports->length);
+
+  if (!imports)
+    return NULL;
+
+  r_list_foreach (obj->imports, iter, imp) {
+    imports[i] = (char*)malloc(strlen(imp->name));
+    if (imports[i])
+      strncpy(imports[i],imp->name,strlen(imp->name));
+    i++;
+  }
+  
+  int imp_size = i;
+  i=0;
+
+  RAnalRef *refi;
+  RList *refs = r_anal_fcn_get_refs (core->anal, fcn);
+  char** xrefs = (char**)malloc(sizeof(char*)*refs->length);
+  
+  if (xrefs)
+    r_list_foreach (refs, iter, refi) {
+      RFlagItem *f = r_flag_get_at (core->flags, refi->addr, true);
+      const char *name = f ? f->name: "";
+      for (int j = 0; j < imp_size; ++j)
+        if (strstr(name,imports[j])){ // radare2 add function type before the name for imported fncts 
+          xrefs[i] = malloc(strlen(imports[j]));
+          if (xrefs[i])
+            strncpy(xrefs[i], imports[j],strlen(imports[j]));
+          ++i;
+        }
+    }
+
+
+  for (int j = 0; j < imp_size; ++j)
+    if (imports[j])
+      free(imports[j]);
+  free(imports);
+  *size = i;  
+  if(!i)
+    return NULL;
+
+  return xrefs;
+}

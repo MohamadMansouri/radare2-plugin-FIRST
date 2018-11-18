@@ -115,17 +115,8 @@ bool  f_set_config();
 void set_token();
 void set_hashes(RCore *core);
 char* get_token();
-
-
-
-
-
-
-
-
-
-
-
 char* get_arch(RCore* core);
+char* get_signature(RCore* core, const RAnalFunction* fcn);
+char** get_apis(RCore* core, RAnalFunction* fcn, int* size);
 
 #endif
