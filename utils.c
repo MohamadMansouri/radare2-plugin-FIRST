@@ -450,7 +450,57 @@ RespCreated s_created(){
   return metadata_array;
 }
 
-void s_add(Metadata metadata){
+void s_add(Metadata metadata[], int size, char* arch){
+  r_cons_printf("The following functions will be added:\n");
+  
+  int l = snprintf(NULL,0, "md5=%s&crc32=%d&functions={xx}", hashes.f_md5, hashes.f_crc32);
+  char* parms = malloc(l+1);
+      if(!parms )
+        return;
+  snprintf(parms,l+1,"md5=%s&crc32=%d&functions={",hashes.f_md5, hashes.f_crc32);
+  strcat(parms,"%s}");
+
+  for (int i=0; i< size; i++){ 
+    Metadata m = metadata[i];
+    r_cons_printf("\tname = %s\n", m.name );
+
+    int s = snprintf(NULL,0,"\"%d\": {\"comment\": \"%s\", \"opcodes\": \"%s\", \"name\": \"%s\", \"apis\" : [\"%s\"] , \"architecture\": \"%s\", \"prototype\": \"%s\"}",\
+       m.address, m.comment, m.signature, m.name, "test" , arch, m.prototype);
+    char* functions = malloc(s+5);
+    if (!functions)
+      return;
+    snprintf(functions,s+1,"\"%d\": {\"comment\": \"%s\", \"opcodes\": \"%s\", \"name\": \"%s\", \"apis\" : [\"%s\"] , \"architecture\": \"%s\", \"prototype\": \"%s\"}",\ 
+       m.address, m.comment, m.signature, m.name, "test" , arch, m.prototype);      
+    s = snprintf(NULL,0,parms,functions);
+    l += s;
+    if (i < size - 1){
+      strcat(functions, ", %s");
+      l += 4;
+    }
+      char* tmp = malloc(l+1);
+        if(!tmp )
+          return;
+      snprintf(tmp,l+1,parms, functions);
+      parms = realloc(parms,strlen(tmp)+1);
+      if (!parms)
+        return;
+      strncpy(parms,tmp,strlen(tmp)+1);
+      free(tmp);
+      free(functions);
+    }
+    send_p(f_add,f_server_config._api_key, parms, data_callback);
+
+    printf("%s\n", response);
+    // if(m.apis_size)
+    //   for (int i = 0; i < m.apis_size; ++i){
+    //     if (!i)
+    //       // r_cons_printf("%s", m.apis[i]); 
+    //     else 
+    //       r_cons_printf(", %s", m.apis[i]); 
+    //   }
+  //   r_cons_printf(" ]\n\n");
+
+  
 
 }
 
@@ -603,9 +653,8 @@ bool f_set_config()
   char *homedir = NULL;
   homedir = (char*)malloc(strlen(getenv("HOME"))+ strlen("/root/.config/first/first.config"));
   strcpy(homedir,getenv("HOME"));
-  homedir = strcat(homedir,"/.config/first/first.config");
-
-  if (ini_parse(homedir, handler, &f_server_config) < 0) {
+  
+  if (ini_parse(strcat(homedir,"/.config/first/first.config"), handler, &f_server_config) < 0) {
         printf("Can't load configuration file!\n");
         return 1;
     }
@@ -692,7 +741,9 @@ char* get_signature(RCore* core, const RAnalFunction* fcn){
     return NULL;
   char address[18];
   sprintf(address,"p8 $FS @0x%08x", fcn->addr);
-  return r_core_cmd_str(core,address);
+  char* result = r_core_cmd_str(core,address);
+  result[strlen(result)-1]='\0';
+  return result;
 }
 
 
@@ -734,14 +785,25 @@ char** get_apis(RCore* core, RAnalFunction* fcn, int* size){
     r_list_foreach (refs, iter, refi) {
       RFlagItem *f = r_flag_get_at (core->flags, refi->addr, true);
       const char *name = f ? f->name: "";
+      bool exist = false;
       for (int j = 0; j < imp_size; ++j)
         if (strstr(name,imports[j])){ // radare2 add function type before the name for imported fncts 
-          xrefs[i] = malloc(strlen(imports[j]));
-          if (xrefs[i])
-            strncpy(xrefs[i], imports[j],strlen(imports[j]));
-          ++i;
+          for (int k = 0; k < i; ++k)
+            if (!strcmp(imports[j],xrefs[k])){
+              exist = true;
+              break; 
+            }
+          if(!exist){
+            xrefs[i] = malloc(strlen(imports[j]));
+            if (xrefs[i]){
+              strncpy(xrefs[i], imports[j],strlen(imports[j]));
+            }
+            ++i;
+          }
+        break;
         }
     }
+    
 
 
   for (int j = 0; j < imp_size; ++j)
@@ -753,4 +815,104 @@ char** get_apis(RCore* core, RAnalFunction* fcn, int* size){
     return NULL;
 
   return xrefs;
+}
+
+char* get_prototype(RCore *core, RAnalFunction *fcn){
+  if (!fcn)
+    return NULL;
+  char cmd[6+strlen(fcn->name)];
+  sprintf(cmd, "afcf %s",fcn->name);
+  char* result = r_core_cmd_str(core, cmd);
+  result[strlen(result)-1]='\0';
+  return result;
+}
+
+char* get_comment(RCore *core, RAnalFunction *fcn){
+  char cmd[15];
+  sprintf(cmd, "CC. 0x%08x",fcn->addr); 
+  char* result = r_core_cmd_str(core, cmd);
+  result[strlen(result)-1]='\0';
+  return result;
+}
+
+
+bool set_comment(RCore *core, RAnalFunction *fcn, const char* comment){
+  if (!comment)
+    return false;
+
+  char cmd[16 + strlen(comment)];
+  sprintf(cmd, "CC %s @0x%08x",comment,fcn->addr);
+  return r_core_cmd0(core, cmd);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool do_add(RCore* core, RAnalFunction *fcn){
+  Metadata m;
+  m.address = (int)fcn->addr;
+  char* opcodes = get_signature(core, fcn);
+  m.signature = r_base64_encode_dyn(opcodes,strlen(opcodes));
+  m.name = fcn->name;
+  m.prototype = get_prototype(core, fcn);
+  m.comment = get_comment(core, fcn);
+  int size = 0;
+  m.apis = get_apis(core, fcn, &size);
+  m.apis_size = size;
+  
+  Metadata metadata[1];
+  metadata[0] = m;
+  eprintf("adding function %s of address 0x%08x\n",fcn->name, fcn->addr);
+  s_add(metadata,1, get_arch(core)); 
+  
+  for (int i = 0; i < size; ++i)
+    free(m.apis[i]);
+  free(m.apis);
+
+}
+
+
+bool do_add_all(RCore* core, RList* fcns){
+  RListIter *iter;
+  RAnalFunction *fcn;
+  Metadata metadata[fcns->length];
+  int i = 0;
+  r_list_foreach (fcns, iter, fcn) {
+    Metadata m;
+    m.address = (int)fcn->addr;
+    char* opcodes = get_signature(core, fcn);
+    m.signature = r_base64_encode_dyn(opcodes,strlen(opcodes));
+    m.name = fcn->name;
+    m.prototype = get_prototype(core, fcn);
+    m.comment = get_comment(core, fcn);
+    int size = 0;
+    m.apis = get_apis(core, fcn, &size);
+    m.apis_size = size;
+    
+    metadata[i++] = m;
+    // make max 20
+  }
+
+  s_add(metadata,fcns->length,get_arch(core));
+
+  for (int i=0; i < fcns->length; ++i){
+    for (int j = 0; j < metadata[i].apis_size ; ++j)
+      free(metadata[i].apis[j]);
+    free(metadata[i].apis);
+  }
 }

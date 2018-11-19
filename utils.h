@@ -61,7 +61,8 @@ typedef struct Metadata
 	bool is_lib; //True if function is a library function
 	bool has_changed; //True if function metadata has changed
 	char* signature; //The opcodes associated with the function // String (base64 encoded)
-	char* apis[]; //The APIs called by the function // List of Strings (max_string_length = 64)
+	int apis_size;
+	char** apis; //The APIs called by the function // List of Strings (max_string_length = 64)
 }Metadata;
 
 typedef struct MetadataServer
@@ -94,7 +95,7 @@ void send_g(action act, char* token, char* parms, size_t callback(void *ptr, siz
 void send_p(action act, char* token, char* parms, size_t callback(void *ptr, size_t size, size_t nmemb, void *stream));
 bool s_test_connection();
 void s_check_in(action act);
-void s_add(Metadata metadata);
+void s_add(Metadata metadata[], int size, char* arch);
 void s_history(char** metadata_id, int size);
 bool s_applied(char* metadata_id);
 bool s_unapplied(char* metadata_id);
@@ -118,5 +119,17 @@ char* get_token();
 char* get_arch(RCore* core);
 char* get_signature(RCore* core, const RAnalFunction* fcn);
 char** get_apis(RCore* core, RAnalFunction* fcn, int* size);
+char* get_prototype(RCore *core , RAnalFunction *fcn);
+char* get_comment(RCore* core, RAnalFunction *fcn);
+bool set_comment(RCore* core, RAnalFunction *fcn, const char* comment);
 
+
+
+
+
+
+
+
+bool do_add(RCore *core,RAnalFunction *fcn);
+bool do_add_all(RCore* core, RList* fcns);
 #endif

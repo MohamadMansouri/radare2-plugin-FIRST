@@ -38,15 +38,53 @@ int cmd_fst(RCore* core, const char *input) {
     if (!input) {
         return true;
     }
+
     switch (input[0]) {
     case 'a':
         switch(input[1]){
         case 'a':
-            eprintf("add all\n");
+        {
+            RList* fcns = core->anal->fcns;
+            if(fcns)
+                do_add_all(core,fcns);
             break;
+        }
+        case ' ':
         case '\0':
-            eprintf("add function\n");
+        {
+            RAnalFunction* fcn;
+            if (input[1] == ' '){
+
+                fcn = r_anal_fcn_find_name(core->anal, input+2);
+
+                if (!fcn){
+                    ut64 addr = r_num_math(core->num, input + 2);
+                    if (core->num->nc.errors){
+                        eprintf("Fst: unknown function address or name\n");
+                        break;
+                    }
+                    fcn = r_anal_get_fcn_at(core->anal, (ut64)r_num_math(core->num, input + 2),0);
+                    if(!fcn){
+                        eprintf("Fst: cant find function\n");
+                        break;
+                    }
+                }
+            }
+            else{
+                ut64 addr = r_num_math(core->num, "$FB");
+                if (core->num->nc.errors){
+                    eprintf("Fst: cant find function\n");
+                    break;
+                }
+                fcn = r_anal_get_fcn_at(core->anal, addr,0);
+                if(!fcn){
+                    eprintf("Fst: cant find function\n");
+                    break;
+                }
+            }
+            do_add(core, fcn);
             break;
+        }
         case 'p':
             eprintf("apply metadata\n");
             break;
@@ -91,8 +129,7 @@ int cmd_fst(RCore* core, const char *input) {
             char *homedir = NULL;
             homedir = (char*)malloc(strlen(getenv("HOME"))+ strlen("/root/.config/first/first.config"));
             strcpy(homedir,getenv("HOME"));
-            homedir = strcat(homedir,"/.config/first/first.config");
-            eprintf("Problem connecting to FIRST server... Check the configuration file at %s\n", homedir);
+            eprintf("Problem connecting to FIRST server... Check the configuration file at %s\n", strcat(homedir,"/.config/first/first.config"));
         }
         break;
     case '?':
@@ -115,7 +152,7 @@ int cmd(void *user, const char *input) {
     if (strncmp ("Fst", input, 3)) {
         return false;
     }
-
+    set_hashes(core);
     cmd_fst(core,input+3);
 
     return true;
@@ -150,3 +187,6 @@ RLibStruct radare_plugin = {.type = R_LIB_TYPE_CORE,
                             .data = &r_core_plugin_test,
                             .version = R2_VERSION};
 #endif
+
+
+//05bf1fe4259178b7a7a02f0e7
