@@ -7,7 +7,7 @@ PLUGNAME=first
 TARGET=$(PLUGNAME).$(LIBEXT)
 
 all:
-	$(CC) $(CFLAGS) $(LDFLAGS) -shared -fPIC utils.c first.c jsmn.c ini.c -o first.$(LIBEXT)
+	$(CC) $(CFLAGS) $(LDFLAGS) -g -O0 -shared -fPIC utils.c first.c jsmn.c ini.c -o first.$(LIBEXT)
 	$(MAKE) install
 
 
