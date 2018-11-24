@@ -13,6 +13,8 @@
 
 
 
+bool init_fst = false;
+bool init_fcn = false;
 
 static const char *help_msg_Fst[] = {
 "Usage:", "Fst[?asug]", "FIRST plugin",
@@ -20,9 +22,10 @@ static const char *help_msg_Fst[] = {
 "Fst?", "", "show this help",
 "Fsta", "[func]", "add function to FIRST",
 "Fstaa", "", "add all functions to FIRST",
-"Fstap", "[id]", "apply function metadata",
+"Fstaac", "[comment]", "add all functions to FIRST with a comment",
+"Fstd", "[id]", "delete annotation",
 "Fstu", "[id]", "unapply function metadata",
-"Fstg", "[id]", "get function metadata",
+"Fstg", "", "get all annotation saved in FIRST",
 "Fstgc", "[id]", "get created function metadata",
 "Fstgh", "[id]", "get history function metadata",
 "Fsts", "[func]", "scan for similar functions in FIRST",
@@ -45,8 +48,24 @@ int cmd_fst(RCore* core, const char *input) {
         case 'a':
         {
             RList* fcns = core->anal->fcns;
-            if(fcns)
-                do_add_all(core,fcns);
+            if(fcns){
+                r_cons_printf("Adding %d functions to FIRST\n", fcns->length);
+                if (input[2] == 'c' && input[3] == ' ' && input[4] != '\0' ){
+                    do_add_all(core,fcns, input + 4 );
+                    break;
+                }
+                do_add_all(core,fcns,NULL);
+                // int pop_s = 0 ;
+                // Metadata *pop_fcn = get_fcns_db(&pop_s);
+                // for (int i=0; i< pop_s; ++i ){
+                //     printf("\n\n\n");
+                //     printf("id = \t%s\n", (pop_fcn+i)->id);
+
+                // }
+            }
+            else{
+
+            }
             break;
         }
         case ' ':
@@ -60,12 +79,12 @@ int cmd_fst(RCore* core, const char *input) {
                 if (!fcn){
                     ut64 addr = r_num_math(core->num, input + 2);
                     if (core->num->nc.errors){
-                        eprintf("Fst: unknown function address or name\n");
+                        eprintf("Unknown function address or name\n");
                         break;
                     }
                     fcn = r_anal_get_fcn_at(core->anal, (ut64)r_num_math(core->num, input + 2),0);
                     if(!fcn){
-                        eprintf("Fst: cant find function\n");
+                        eprintf("Cant find function\n");
                         break;
                     }
                 }
@@ -73,24 +92,29 @@ int cmd_fst(RCore* core, const char *input) {
             else{
                 ut64 addr = r_num_math(core->num, "$FB");
                 if (core->num->nc.errors){
-                    eprintf("Fst: cant find function\n");
+                    eprintf("Cant find function\n");
                     break;
                 }
                 fcn = r_anal_get_fcn_at(core->anal, addr,0);
                 if(!fcn){
-                    eprintf("Fst: cant find function\n");
+                    eprintf("Cant find function\n");
                     break;
                 }
             }
+
+            eprintf("Adding function %s of address 0x%08x\n",fcn->name, fcn->addr);
             do_add(core, fcn);
             break;
         }
-        case 'p':
-            eprintf("apply metadata\n");
-            break;
         default:
             r_core_cmd_help(core,help_msg_Fst);
         }
+        break;
+    case 'd':
+        if(input[1] == ' ' && strlen(input+2) == 25)
+            do_delete(core, input+2 );
+        else
+            eprintf("Missing or wrong format id\n");
         break;
     case 's':
         switch(input[1]){
@@ -105,6 +129,7 @@ int cmd_fst(RCore* core, const char *input) {
         }
         break;
     case 'u':
+        read_db();
         eprintf("unapply metadata\n");
         break;
     case 'g':
@@ -116,7 +141,7 @@ int cmd_fst(RCore* core, const char *input) {
                 eprintf("get history\n");
                 break;
             case '\0':
-                eprintf("get metadata\n");
+                do_get();
                 break;
             default:
                 r_core_cmd_help(core,help_msg_Fst);
@@ -147,12 +172,30 @@ int cmd_fst(RCore* core, const char *input) {
 
 
 int cmd(void *user, const char *input) {
-    // RCmd *rcmd = (RCmd*) user;
     RCore *core = (RCore *) user;
     if (strncmp ("Fst", input, 3)) {
         return false;
     }
-    set_hashes(core);
+    if(!init_fst){
+        set_hashes(core);
+        // if(!initialize_db()){
+        //     eprintf("Failed initializing DB!\n");
+        //     return true;
+        // }
+        init_fst = true;
+    }
+    if (!init_fcn)
+        if(populate_fcn(core))
+            init_fcn = true;
+
+    // int pop_s = 0 ;
+    // Metadata *pop_fcn = get_fcns_db(&pop_s);
+    // for (int i=0; i< pop_s; ++i ){
+    //     // printf("name = \t%s\n", pop_fcn->name);
+    //     printf("orig_name = \t%s\n", (pop_fcn+i)->original_name);
+    //     printf("segment = \t%d\n", (pop_fcn+i)->segment);
+    //     printf("address = \t%d\n", (pop_fcn+i)->address);
+    // }
     cmd_fst(core,input+3);
 
     return true;

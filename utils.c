@@ -17,7 +17,10 @@ static bool checkedin= false;
 binary_info hashes;
 const char* path[10] = {"api/test_connection", "api/sample/checkin","api/metadata/add","api/metadata/history","api/metadata/applied","api/metadata/unapplied","api/metadata/delete","api/metadata/created","api/metadata/get","api/metadata/scan"};
 CURL *curl;
-char* response=NULL;
+char* response = NULL;
+char* response_get = NULL;
+Metadata* pop_list = NULL;
+int num_fcn = 0;
 
 static int jsoneq(const char *json, jsmntok_t *tok, const char *s) {
   if (tok->type == JSMN_STRING && (int) strlen(s) == tok->end - tok->start &&
@@ -166,30 +169,32 @@ size_t data_callback(void *ptr, size_t size, size_t nmemb, void *stream){
   action act = *(action*)stream;
   long http_code = 0;
   curl_easy_getinfo (curl, CURLINFO_RESPONSE_CODE, &http_code);
-  if (http_code == 200)
-    response = (char*)ptr;
-
+  if (http_code == 200 && act != f_applied){
+    response = malloc (strlen((char*)ptr)+1);
+    strcpy(response , (char*)ptr);
+  }
   return size*nmemb;
 }
 
 
-void send_g(action act, char* token, char* parms, size_t callback(void *ptr, size_t size, size_t nmemb, void *stream))
+bool send_g(action act, char* token, char* parms, size_t callback(void *ptr, size_t size, size_t nmemb, void *stream))
 {
   s_check_in(act);
 
   curl = curl_easy_init();
   CURLcode res;
 
-  char url[strlen(f_server_config._protocol)+strlen(f_server_config._server)+strlen(path[act])+strlen(token)];
+  char url[strlen(f_server_config._protocol)+strlen(f_server_config._server)+strlen(path[act])+strlen(token) + (parms? strlen(parms) : 0)];
   sprintf(url,"%s://%s/%s/%s",f_server_config._protocol, f_server_config._server, path[act], token);
   if (parms != NULL)
     strcat(url,parms); 
 
   if(curl) {
-    
     // curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
     // curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION,debug_response);
     curl_easy_setopt(curl, CURLOPT_URL, url);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
     curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "Mozilla/5.0");
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, callback);
@@ -197,16 +202,18 @@ void send_g(action act, char* token, char* parms, size_t callback(void *ptr, siz
     curl_easy_setopt(curl, CURLOPT_PORT, f_server_config._port);
 
     res = curl_easy_perform(curl);
-    
-    if(res != CURLE_OK)
-    fprintf(stderr, "failed to connect to server: %s\n",curl_easy_strerror(res));
+    if(res != CURLE_OK){
+      fprintf(stderr, "failed to connect to server: %s\n",curl_easy_strerror(res));
+      return false;
+    }
     curl_easy_cleanup(curl);
   }
  
   curl_global_cleanup();
+  return true;
 }
 
-void send_p(action act, char* token, char* parms, size_t callback(void *ptr, size_t size, size_t nmemb, void *stream)){
+bool send_p(action act, char* token, char* parms, size_t callback(void *ptr, size_t size, size_t nmemb, void *stream)){
     
     s_check_in(act);
     curl = curl_easy_init();
@@ -216,6 +223,8 @@ void send_p(action act, char* token, char* parms, size_t callback(void *ptr, siz
     
     if(curl) {
     curl_easy_setopt(curl, CURLOPT_URL, url);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
     // curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
     // curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION,debug_response);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, parms);
@@ -225,29 +234,35 @@ void send_p(action act, char* token, char* parms, size_t callback(void *ptr, siz
     curl_easy_setopt(curl, CURLOPT_PORT, f_server_config._port);
     res = curl_easy_perform(curl);
     
-    if(res != CURLE_OK)
-    fprintf(stderr, "failed to connect to server: %s\n",curl_easy_strerror(res));
+    if(res != CURLE_OK){
+      fprintf(stderr, "failed to connect to server: %s\n",curl_easy_strerror(res));
+      return false;
+    }
     curl_easy_cleanup(curl);
     }
  
   curl_global_cleanup();
+  return true;
 }
 
 bool s_test_connection(){
   jsmntok_t token[3];
   jsmn_parser parser;
   jsmn_init(&parser);
-  send_g(f_test,f_server_config._api_key,NULL,data_callback);
+  if(!send_g(f_test,f_server_config._api_key,NULL,data_callback))
+    return false;
   if(response != NULL){
     
     int r = jsmn_parse(&parser, response, strlen(response), token, 3);
     
     if (r !=3 || token[0].type != JSMN_OBJECT){
+      free(response);
       response = NULL;
       return false;
     }
     if(!jsoneq(response, &token[1], "status") && !jsoneq(response, &token[2], "connected")){
-    response=NULL;
+    free(response);
+    response = NULL;
     return true;
       
     }
@@ -267,19 +282,22 @@ void s_check_in (action act){
     char parms[strlen("md5=&crc32=&sha1=") + strlen(hashes.f_md5) + sizeof(hashes.f_crc32) + strlen(hashes.f_sha1)];
     sprintf( parms,"md5=%s&crc32=%d&sha1=%s", hashes.f_md5, hashes.f_crc32, hashes.f_sha1);
     checkedin = true;
-    send_p(f_checkin, f_server_config._api_key, parms , data_callback);
+    if(!send_p(f_checkin, f_server_config._api_key, parms , data_callback))
+      return;
    
     if (response != NULL){
       int r = jsmn_parse(&parser, response, strlen(response), token, 5);
       if (r !=5 || token[0].type != JSMN_OBJECT){
         printf("checkin error: error parsing response from server!\n");
+        free(response);
         response = NULL;
         checkedin = false;
         return;
       }
 
       if(!jsoneq(response, &token[1], "failed") && token[2].type == JSMN_PRIMITIVE && *(response + token[2].start) == 'f'){
-        response=NULL;
+        free(response);
+        response = NULL;
         return;
       } 
       else if(!jsoneq(response, &token[1], "failed") && token[2].type == JSMN_PRIMITIVE && *(response + token[2].start) == 't'){
@@ -289,7 +307,8 @@ void s_check_in (action act){
         memset(error_msg+size, '\0',1);
         printf("checkin error: %s\n",error_msg);
       }
-      response =NULL;
+      free(response);
+      response = NULL;
       checkedin = false;
       return;
     }
@@ -319,7 +338,8 @@ void s_history(char** metadata_id, int size){
     }
   }
   strcat(parms,"]");
-  send_p(f_history, f_server_config._api_key, parms, data_callback);
+  if(!send_p(f_history, f_server_config._api_key, parms, data_callback))
+    return;
   
   if (!response){
     printf("Error receiving response from server!\n");
@@ -329,6 +349,7 @@ void s_history(char** metadata_id, int size){
   
   if (token[0].type != JSMN_OBJECT){
     printf("Error parsing response from server!\n");
+    free(response);
     response = NULL;
     return NULL;
   }
@@ -342,8 +363,8 @@ void s_get(char** metadata_id, int size){
   char parms[strlen("metadata=[]") + 27*size + (size-1)];
   char tmp[28];
 
-  int MAX_history = 10;
-  int ntoken = 5 + (5 + 8*MAX_history)*size;
+  int MAX_GET = 20;
+  int ntoken = 5 + 14*size;
   jsmntok_t token[ntoken];
   jsmn_parser parser;
   jsmn_init(&parser);
@@ -361,23 +382,52 @@ void s_get(char** metadata_id, int size){
     }
   }
   strcat(parms,"]");
-  send_p(f_get, f_server_config._api_key, parms, data_callback);
-  
+  if(!send_p(f_get, f_server_config._api_key, parms, data_callback))
+    return;
   if (!response){
-    printf("Error receiving response from server!\n");
-    return NULL;
+    printf("get: error receiving response from server!\n");
+    return ;
   }
+
   int r = jsmn_parse(&parser, response, strlen(response), token, ntoken);
   
-  if (token[0].type != JSMN_OBJECT){
-    printf("Error parsing response from server!\n");
+  if (r != ntoken &&  token[0].type != JSMN_OBJECT){
+    printf("get: error parsing response from server!\n");
+    free(response);
     response = NULL;
-    return NULL;
+    return ;
   }
+  if(!jsoneq(response, &token[1], "failed") && token[2].type == JSMN_PRIMITIVE && *(response + token[2].start) == 'f' && !jsoneq(response, &token[3], "results")  && token[4].type == JSMN_OBJECT){
+    jsmntok_t* t = &token[4];
+  
 
-// TODO: implement the parser of the get
-  return NULL;
-
+    for(int i = 1 ; i < (t->size)*14 ; i+=14){
+      int sz = (t+i)->end - (t+i)->start;
+      char id[sz + 1];
+      strncpy(id,response+(t+i)->start,sz);
+      id[sz] = '\0';
+      r_cons_printf("%-25.25s", id);
+      jsmntok_t* tt = t+i+1;
+      for(int j = 1 ; j < (tt->size)*2 ; j+=2){
+        int width=0;
+        if(!jsoneq(response, tt+j, "name") && (tt+j)->type == JSMN_STRING)
+          width = 50;
+        if(!jsoneq(response, tt+j, "prototype") && (tt+j)->type == JSMN_STRING)
+          width = 50;
+        if(!jsoneq(response, tt+j, "comment") && (tt+j)->type == JSMN_STRING)
+          width = 50;
+        if(!jsoneq(response, tt+j, "creator") && (tt+j)->type == JSMN_STRING)
+          width = 20;
+        if(!jsoneq(response, tt+j, "rank")&& (tt+j)->type == JSMN_STRING)
+          width = 2;
+        if(width)
+          r_cons_printf("\t%-*.*s", width, ((tt+j+1)->end - (tt+j+1)->start) > width ? width : ((tt+j+1)->end - (tt+j+1)->start) ,response+(tt+j+1)->start );
+      }    
+      r_cons_printf("\n");
+    }
+  }
+  free(response);
+  response = NULL;
 
 }
 
@@ -402,7 +452,8 @@ RespCreated s_created(){
     char parms[2];
     parms[0] = '/';
     parms[1] = page + '0';
-    send_g(f_created,f_server_config._api_key,parms,data_callback);
+    if(!send_g(f_created,f_server_config._api_key,parms,data_callback))
+      return metadata_array;
 
     
     if (!response){
@@ -414,6 +465,7 @@ RespCreated s_created(){
     
     if (token[0].type != JSMN_OBJECT){
       printf("Error parsing response from server!\n");
+      free(response);
       response = NULL;
       break;
     }
@@ -422,6 +474,7 @@ RespCreated s_created(){
       
     if (resp_created == NULL){
       printf("Malformed response!\n");
+      free(response);
       response = NULL;
       break;
     }
@@ -443,6 +496,7 @@ RespCreated s_created(){
       first_time =false;
     
     free(resp_created);       
+    free(response);
     response = NULL;
 
 
@@ -450,57 +504,156 @@ RespCreated s_created(){
   return metadata_array;
 }
 
-void s_add(Metadata metadata[], int size, char* arch){
-  r_cons_printf("The following functions will be added:\n");
-  
-  int l = snprintf(NULL,0, "md5=%s&crc32=%d&functions={xx}", hashes.f_md5, hashes.f_crc32);
+bool s_add(Metadata metadata[], int size, char* arch){
+  int ntoken = 5 + size*2;
+  jsmntok_t token[ntoken];
+  jsmn_parser parser;
+  jsmn_init(&parser);
+  // r_cons_printf("The following functions will be added:\n");
+
+  int l = snprintf(NULL,0, "md5=%s&crc32=%d&functions={%s}", hashes.f_md5, hashes.f_crc32);
   char* parms = malloc(l+1);
-      if(!parms )
-        return;
-  snprintf(parms,l+1,"md5=%s&crc32=%d&functions={",hashes.f_md5, hashes.f_crc32);
-  strcat(parms,"%s}");
+  if(!parms )
+    return false;
+  snprintf(parms,l+1,"md5=%s&crc32=%d&functions={%s}",hashes.f_md5, hashes.f_crc32,"%s");
 
   for (int i=0; i< size; i++){ 
     Metadata m = metadata[i];
-    r_cons_printf("\tname = %s\n", m.name );
 
-    int s = snprintf(NULL,0,"\"%d\": {\"comment\": \"%s\", \"opcodes\": \"%s\", \"name\": \"%s\", \"apis\" : [\"%s\"] , \"architecture\": \"%s\", \"prototype\": \"%s\"}",\
-       m.address, m.comment, m.signature, m.name, "test" , arch, m.prototype);
+    // r_cons_printf("\tname = %s\n", m.name );
+
+    int s = snprintf(NULL,0,"\"%d\": {\"comment\": \"%s\", \"opcodes\": \"%s\", \"name\": \"%s\", \"apis\" : [%s] , \"architecture\": \"%s\", \"prototype\": \"%s\"}",\
+       m.address, m.comment, m.signature, m.name, "%s" , arch, m.prototype);
     char* functions = malloc(s+5);
     if (!functions)
-      return;
-    snprintf(functions,s+1,"\"%d\": {\"comment\": \"%s\", \"opcodes\": \"%s\", \"name\": \"%s\", \"apis\" : [\"%s\"] , \"architecture\": \"%s\", \"prototype\": \"%s\"}",\ 
-       m.address, m.comment, m.signature, m.name, "test" , arch, m.prototype);      
-    s = snprintf(NULL,0,parms,functions);
-    l += s;
+      return false;
+    if (!m.apis_size)
+      snprintf(functions,s+1,"\"%d\": {\"comment\": \"%s\", \"opcodes\": \"%s\", \"name\": \"%s\", \"apis\" : [%s] , \"architecture\": \"%s\", \"prototype\": \"%s\"}",\ 
+        m.address, m.comment, m.signature, m.name, "" , arch, m.prototype);
+    else{
+      snprintf(functions,s+1,"\"%d\": {\"comment\": \"%s\", \"opcodes\": \"%s\", \"name\": \"%s\", \"apis\" : [%s] , \"architecture\": \"%s\", \"prototype\": \"%s\"}",\ 
+        m.address, m.comment, m.signature, m.name, "%s" , arch, m.prototype);
+      
+      int aps = snprintf(NULL, 0 ,"\"%s\"", m.apis[0]);
+      char* apis = malloc(aps+7);
+      if(!apis)
+        return false;
+      snprintf(apis,aps+1 ,"\"%s\"" ,m.apis[0]);
+      for (int ap=1; ap < m.apis_size; ++ap){
+        strcat(apis, ", \"%s\"");
+        aps = snprintf(NULL,0,apis, m.apis[ap]);
+        char* apis_tmp = malloc(aps +1);
+        snprintf(apis_tmp,aps+1,apis, m.apis[ap]);
+        apis = realloc(apis, aps+7);
+        strcpy(apis,apis_tmp);
+        free(apis_tmp);
+      }
+
+      int as = snprintf(NULL,0,functions, apis);
+      char* at = malloc(as+1);
+      if(!at)
+        return false;
+      snprintf(at,as+1, functions, apis);
+      functions = realloc(functions, as+5);
+      strcpy(functions, at);
+      free(at);
+    }      
+      
+    l = snprintf(NULL,0,parms,functions);
+
     if (i < size - 1){
       strcat(functions, ", %s");
-      l += 4;
+      l+=4;      
     }
-      char* tmp = malloc(l+1);
-        if(!tmp )
-          return;
-      snprintf(tmp,l+1,parms, functions);
-      parms = realloc(parms,strlen(tmp)+1);
-      if (!parms)
-        return;
-      strncpy(parms,tmp,strlen(tmp)+1);
-      free(tmp);
-      free(functions);
+    //   // printf("%d %d %s\n",as, strlen(at), at );
+    char* tmp = malloc(l+1);
+    if(!tmp )
+      return false;
+    snprintf(tmp,l+1,parms, functions);
+    parms = realloc(parms, l+1);
+    if (!parms)
+      return false;
+    strncpy(parms,tmp,l+1);
+    free(tmp);
+    free(functions);
+  }
+if(!send_p(f_add,f_server_config._api_key, parms, data_callback))
+  return false;
+// printf("%s\n", parms);
+free(parms);
+if (!response){
+  printf("add : error receiving response from server!\n");
+  return false;
+  }
+  int r = jsmn_parse(&parser, response, strlen(response), token, ntoken);
+  if (r !=ntoken || token[0].type != JSMN_OBJECT){
+    printf("add: error parsing response from server!\n");
+    free(response);
+    response = NULL;
+    return false;
+  }
+  if(!jsoneq(response, &token[1], "failed") && token[2].type == JSMN_PRIMITIVE && *(response + token[2].start) == 'f' && !jsoneq(response, &token[3], "results")  && token[4].type == JSMN_OBJECT){
+    jsmntok_t* t = &token[4];
+    for(int i = 1 ; i < (t->size)*2 ; i+=2){
+      if((t+i)->type == JSMN_STRING && (t+i+1)->type == JSMN_STRING){
+        int sz1 = (t+i)->end - (t+i)->start;
+        int sz2 = (t+i+1)->end - (t+i+1)->start;
+        char addr[sz1 + 1];
+        char id[sz2 + 1];
+        strncpy(addr,response+(t+i)->start,sz1);
+        strncpy(id,response+(t+i+1)->start,sz2);
+        addr[sz1] = '\0';
+        id[sz2] = '\0';
+        int addr_int = atoi(addr);
+        
+        // printf("%d\n", t->size);
+        // s_applied(id);
+
+        DBdata d;
+        strncpy(d.id, id,25);
+        d.id[25]= '\0';
+        d.address = addr_int;
+        d.deleted = false;
+        save(d);
+        if (!pop_list)
+          return false;
+
+        int j,k;
+        for (j=0; j< num_fcn; ++j){
+          if((pop_list+j)->address == addr_int)
+            break;
+        }
+        if(j == num_fcn)
+          continue;
+
+        for (k=0; k< size; ++k){
+          if(metadata[k].address == addr_int)
+            break;
+        }
+        if(k == size)
+          continue;        
+
+       if((pop_list + j)->name = malloc(strlen(metadata[k].name)+1))
+          strcpy((pop_list + j)->name ,metadata[k].name);
+       if((pop_list + j)->signature = malloc(strlen(metadata[k].signature)+1))
+          strcpy((pop_list + j)->signature ,metadata[k].signature);
+       if((pop_list + j)->comment = malloc(strlen(metadata[k].comment)+1))
+          strcpy((pop_list + j)->comment ,metadata[k].comment);
+       if((pop_list + j)->prototype = malloc(strlen(metadata[k].prototype)+1))
+          strcpy((pop_list + j)->prototype ,metadata[k].prototype);
+       if((pop_list + j)->id = malloc(strlen(id)+1))
+          strcpy((pop_list + j)->id ,id);
+        (pop_list + j)->offset = (pop_list + j)->address - (pop_list + j)->segment;
+        (pop_list + j)->created = true;
+      }
     }
-    send_p(f_add,f_server_config._api_key, parms, data_callback);
-
-    printf("%s\n", response);
-    // if(m.apis_size)
-    //   for (int i = 0; i < m.apis_size; ++i){
-    //     if (!i)
-    //       // r_cons_printf("%s", m.apis[i]); 
-    //     else 
-    //       r_cons_printf(", %s", m.apis[i]); 
-    //   }
-  //   r_cons_printf(" ]\n\n");
-
-  
+    free(response);
+    response=NULL;
+    return true;
+  }
+  free(response);
+  response = NULL;
+  return false;
 
 }
 
@@ -508,7 +661,7 @@ void s_scan(Metadata metadata){
   
 }
 
-bool s_applied(char* metadata_id){
+void s_applied(char* metadata_id){
   int ntoken = 5;
   jsmntok_t token[ntoken];
   jsmn_parser parser;
@@ -517,26 +670,28 @@ bool s_applied(char* metadata_id){
   char parms[strlen("md5=&crc32=&id=") + strlen(hashes.f_md5) + strlen(metadata_id) + sizeof(hashes.f_crc32)];
   sprintf( parms,"md5=%s&crc32=%d&id=%s", hashes.f_md5, hashes.f_crc32,metadata_id);
 
-  send_p(f_applied,f_server_config._api_key, parms, data_callback);
+  if(!send_p(f_applied,f_server_config._api_key, parms, data_callback))
+    return;
 
-    if (!response){
-      printf("applied : error receiving response from server!\n");
-      response = NULL;
-      return false;
-    }
+  //   if (!response){
+  //     printf("applied : error receiving response from server!\n");
+  //     return false;
+  //   }
 
-  int r = jsmn_parse(&parser, response, strlen(response), token, ntoken);
-  if (r !=ntoken || token[0].type != JSMN_OBJECT){
-    printf("applied: error parsing response from server!\n");
-    response = NULL;
-    return false;
-  }
-  if(!jsoneq(response, &token[1], "failed") && token[2].type == JSMN_PRIMITIVE && *(response + token[2].start) == 'f' && !jsoneq(response, &token[3], "results")  && token[4].type == JSMN_PRIMITIVE && *(response + token[4].start) == 't'){
-    response=NULL;
-    return true;
-  }
+  // int r = jsmn_parse(&parser, response, strlen(response), token, ntoken);
+  // if (r !=ntoken || token[0].type != JSMN_OBJECT){
+  //   printf("applied: error parsing response from server!\n");
+  free(response);//   
+  response = NULL;
+  //   return false;
+  // }
+  // if(!jsoneq(response, &token[1], "failed") && token[2].type == JSMN_PRIMITIVE && *(response + token[2].start) == 'f' && !jsoneq(response, &token[3], "results")  && token[4].type == JSMN_PRIMITIVE && *(response + token[4].start) == 't'){
+  //   free(response);
+  response=NULL;
+  //   return true;
+  // }
 
-  return false;
+  // return false;
 
 }
 
@@ -550,15 +705,17 @@ bool s_unapplied(char* metadata_id){
   sprintf( parms,"md5=%s&crc32=%d&id=%s", hashes.f_md5, hashes.f_crc32,metadata_id);
 
 
-  send_p(f_unapplied,f_server_config._api_key, parms, data_callback);
-
+  if(!send_p(f_unapplied,f_server_config._api_key, parms, data_callback))
+    return false;
   int r = jsmn_parse(&parser, response, strlen(response), token, ntoken);
   if (r !=ntoken || token[0].type != JSMN_OBJECT){
     printf("applied: error parsing response from server!\n");
+    free(response);
     response = NULL;
     return false;
   }
   if(!jsoneq(response, &token[1], "failed") && token[2].type == JSMN_PRIMITIVE && *(response + token[2].start) == 'f' && !jsoneq(response, &token[3], "results")  && token[4].type == JSMN_PRIMITIVE && *(response + token[4].start) == 't'){
+    free(response);
     response=NULL;
     return true;
   }
@@ -567,7 +724,7 @@ bool s_unapplied(char* metadata_id){
 }
 
 
-bool s_delete(char* metadata_id){
+bool s_delete(const char* metadata_id){
 
   int ntoken = 5;
   jsmntok_t token[ntoken];
@@ -576,9 +733,11 @@ bool s_delete(char* metadata_id){
 
   char parms[strlen(metadata_id)+1];
   sprintf( parms,"/%s", metadata_id);
-  send_g(f_delete,f_server_config._api_key, parms, data_callback);
+  if(!send_g(f_delete,f_server_config._api_key, parms, data_callback))
+    return false;
   if (!response){
       printf("delete : error receiving response from server!\n");
+      free(response);
       response = NULL;
       return false;
     }
@@ -586,10 +745,12 @@ bool s_delete(char* metadata_id){
   int r = jsmn_parse(&parser, response, strlen(response), token, ntoken);
   if (r !=ntoken || token[0].type != JSMN_OBJECT){
     printf("delete: error parsing response from server!\n");
+    free(response);
     response = NULL;
     return false;
   }
-  if(!jsoneq(response, &token[1], "failed") && token[2].type == JSMN_PRIMITIVE && *(response + token[2].start) == 'f' && !jsoneq(response, &token[3], "deleted")  && token[4].type == JSMN_PRIMITIVE && *(response + token[4].start) == 't'){
+  if(!jsoneq(response, &token[3], "failed") && token[4].type == JSMN_PRIMITIVE && *(response + token[4].start) == 'f' && !jsoneq(response, &token[1], "deleted")  && token[2].type == JSMN_PRIMITIVE && *(response + token[2].start) == 't'){
+    free(response);
     response=NULL;
     return true;
   }
@@ -651,13 +812,14 @@ static int handler(void* user, const char* section, const char* name,
 bool f_set_config() 
 {
   char *homedir = NULL;
-  homedir = (char*)malloc(strlen(getenv("HOME"))+ strlen("/root/.config/first/first.config"));
+  homedir = (char*)malloc(strlen(getenv("HOME"))+strlen("/.config/first/first.config"));
   strcpy(homedir,getenv("HOME"));
   
   if (ini_parse(strcat(homedir,"/.config/first/first.config"), handler, &f_server_config) < 0) {
         printf("Can't load configuration file!\n");
-        return 1;
+        return false;
     }
+  return true;
 }
 
 
@@ -686,18 +848,6 @@ void set_hashes(RCore *core)
 char* get_token(){
   return f_server_config._api_key;
 }
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 char* get_arch(RCore* core){
@@ -762,15 +912,12 @@ char** get_apis(RCore* core, RAnalFunction* fcn, int* size){
   if (!obj) {
     return NULL;
   }
-  char** imports = (char**)malloc(sizeof(char*)*obj->imports->length);
-
-  if (!imports)
-    return NULL;
+  char* imports[obj->imports->length];
 
   r_list_foreach (obj->imports, iter, imp) {
-    imports[i] = (char*)malloc(strlen(imp->name));
+    imports[i] = (char*)malloc(strlen(imp->name)+1);
     if (imports[i])
-      strncpy(imports[i],imp->name,strlen(imp->name));
+      strcpy(imports[i],imp->name);
     i++;
   }
   
@@ -779,42 +926,43 @@ char** get_apis(RCore* core, RAnalFunction* fcn, int* size){
 
   RAnalRef *refi;
   RList *refs = r_anal_fcn_get_refs (core->anal, fcn);
-  char** xrefs = (char**)malloc(sizeof(char*)*refs->length);
+  char* xrefs[refs->length];
   
-  if (xrefs)
-    r_list_foreach (refs, iter, refi) {
-      RFlagItem *f = r_flag_get_at (core->flags, refi->addr, true);
-      const char *name = f ? f->name: "";
-      bool exist = false;
-      for (int j = 0; j < imp_size; ++j)
-        if (strstr(name,imports[j])){ // radare2 add function type before the name for imported fncts 
-          for (int k = 0; k < i; ++k)
-            if (!strcmp(imports[j],xrefs[k])){
-              exist = true;
-              break; 
-            }
-          if(!exist){
-            xrefs[i] = malloc(strlen(imports[j]));
-            if (xrefs[i]){
-              strncpy(xrefs[i], imports[j],strlen(imports[j]));
-            }
-            ++i;
+  r_list_foreach (refs, iter, refi) {
+    RFlagItem *f = r_flag_get_at (core->flags, refi->addr, true);
+    const char *name = f ? f->name: "";
+    bool exist = false;
+    for (int j = 0; j < imp_size; ++j)
+      if (strstr(name,imports[j])){ // radare2 add function type before the name for imported fncts 
+        for (int k = 0; k < i; ++k)
+          if (!strcmp(imports[j],xrefs[k])){
+            exist = true;
+            break; 
           }
-        break;
+        if(!exist){
+          xrefs[i] = malloc(strlen(imports[j])+1);
+          if (xrefs[i]){
+            strcpy(xrefs[i], imports[j]);
+          }
+          ++i;
         }
-    }
+      break;
+      }
+  }
     
 
 
   for (int j = 0; j < imp_size; ++j)
     if (imports[j])
       free(imports[j]);
-  free(imports);
   *size = i;  
   if(!i)
     return NULL;
-
-  return xrefs;
+  char** apis = (char**)malloc(sizeof(char*)*i);
+  if(!apis)
+    return NULL;
+  memcpy(apis,xrefs,sizeof(char*)*i);
+  return apis;
 }
 
 char* get_prototype(RCore *core, RAnalFunction *fcn){
@@ -846,6 +994,10 @@ bool set_comment(RCore *core, RAnalFunction *fcn, const char* comment){
 }
 
 
+Metadata* get_fcns_db(int *i){
+  *i= num_fcn;
+  return pop_list;
+}
 
 
 
@@ -861,8 +1013,7 @@ bool set_comment(RCore *core, RAnalFunction *fcn, const char* comment){
 
 
 
-
-
+// doers
 bool do_add(RCore* core, RAnalFunction *fcn){
   Metadata m;
   m.address = (int)fcn->addr;
@@ -877,17 +1028,15 @@ bool do_add(RCore* core, RAnalFunction *fcn){
   
   Metadata metadata[1];
   metadata[0] = m;
-  eprintf("adding function %s of address 0x%08x\n",fcn->name, fcn->addr);
   s_add(metadata,1, get_arch(core)); 
-  
+  r_cons_printf("Done\n");
   for (int i = 0; i < size; ++i)
     free(m.apis[i]);
   free(m.apis);
-
 }
 
 
-bool do_add_all(RCore* core, RList* fcns){
+bool do_add_all(RCore* core, RList* fcns, const char* comm){
   RListIter *iter;
   RAnalFunction *fcn;
   Metadata metadata[fcns->length];
@@ -899,20 +1048,245 @@ bool do_add_all(RCore* core, RList* fcns){
     m.signature = r_base64_encode_dyn(opcodes,strlen(opcodes));
     m.name = fcn->name;
     m.prototype = get_prototype(core, fcn);
-    m.comment = get_comment(core, fcn);
+    if (!comm)
+      m.comment = get_comment(core, fcn);
+    else{
+      char comment[strlen(get_comment(core, fcn)) + strlen(comm) + 3];
+      strcpy(comment, get_comment(core, fcn));
+      strcat(comment, " ");
+      strcat(comment, comm);
+      m.comment = strdup(comment);
+    }
     int size = 0;
     m.apis = get_apis(core, fcn, &size);
     m.apis_size = size;
     
     metadata[i++] = m;
-    // make max 20
+    // make max 20  
   }
+  int j = 0;
+  while (i > 0){
+    s_add(&metadata[j], i > 19? 20 : i ,get_arch(core));
+    j += 20;
+    i -= 20;
+  }
+  r_cons_printf("Done\n");
 
-  s_add(metadata,fcns->length,get_arch(core));
 
   for (int i=0; i < fcns->length; ++i){
     for (int j = 0; j < metadata[i].apis_size ; ++j)
       free(metadata[i].apis[j]);
     free(metadata[i].apis);
   }
+}
+
+
+bool populate_fcn(RCore* core){
+  
+  if (pop_list)
+    return true;
+
+  RList* fcns = core->anal->fcns;
+  pop_list = (Metadata*)malloc(sizeof(Metadata) * fcns->length);
+  num_fcn = fcns->length;
+  if(!num_fcn)
+    return false;
+  RListIter *iter;
+  RAnalFunction *fcn;
+  RBinSection* section;
+  RBinObject* obj;
+  obj = r_bin_cur_object(core->bin);
+  int i = 0;
+  r_list_foreach (fcns, iter, fcn) {
+    (pop_list + i)->original_name = malloc(strlen(fcn->name) + 1);
+    strcpy((pop_list + i)->original_name , fcn->name);
+    (pop_list + i)->address = (int)fcn->addr;
+    section = obj? r_bin_get_section_at (obj, fcn->addr, 1): NULL;
+    (pop_list + i)->segment = section ? (int)section->vaddr : 0;
+    i++;
+  }
+  return true;
+}
+
+
+
+void do_get(){
+  FILE* f;
+  char *path = NULL;
+  int address;
+  char id[26];
+  path = (char*)malloc(strlen(getenv("HOME"))+strlen("/.config/first/.dat") + strlen(hashes.f_md5) + 1);
+  if (!path)
+    return;
+  strcpy(path,getenv("HOME"));
+  strcat(path,"/.config/first/");
+  strcat(path,hashes.f_md5);
+  strcat(path,".dat");
+
+  if( f = fopen(path,"r")){
+    int i = 0;
+    char** mid = NULL;
+    DBdata c;
+    r_cons_printf("%-25s\t%-50s\t%-50s\t%-20s\t%-2s\t%-50s\n","ID","Comment","Name","Creator","Rank","Prototype");
+
+    while (fread(&c, sizeof(DBdata),1,f) > 0 && !c.deleted){
+      mid = (char**)realloc( mid ,sizeof(char*) * (i+1));
+      *(mid + i) = malloc(strlen(c.id)+1);
+      strcpy( *(mid + i), c.id);
+      ++i;
+    }
+    fclose(f);
+    int j = 0;
+    while (i > 0){
+      s_get(&mid[j], i > 19? 20 : i);
+      j += 20;
+      i -= 20;
+    }
+
+  }
+
+}
+
+
+
+
+
+
+void do_delete(RCore* core,const char id[]){
+  if(s_delete(id)){
+    int address = delete_db(id);
+    if (address){
+      RAnalFunction* fcn = r_anal_get_fcn_at(core->anal, (ut64)address,0);
+      r_cons_printf("Annotations of function %s of address 0x%08x are deleted\n", fcn->name, fcn->addr);
+    }
+  }
+  r_cons_printf("deletion failed\n");
+}
+
+
+
+
+bool save(DBdata d){
+  FILE* f;
+  char *path = NULL;
+  int address;
+  path = (char*)malloc(strlen(getenv("HOME"))+strlen("/.config/first/.dat") + strlen(hashes.f_md5) + 1);
+  if (!path)
+    return false;
+  strcpy(path,getenv("HOME"));
+  strcat(path,"/.config/first/");
+  strcat(path,hashes.f_md5);
+  strcat(path,".dat");
+  
+
+  if(f = fopen(path,"r+")){
+    
+    int exist = exist_in_file(f,d);
+    if( exist == -2){
+      fclose(f);
+      return true;
+    }
+    
+    if (exist == -1)
+      fseek(f, 0 , SEEK_END);
+    
+    if (exist >= 0)
+     fseek(f, sizeof(DBdata) * exist , SEEK_SET);
+    
+    goto first_beach; 
+    
+  }
+
+  if(f = fopen(path,"w+")){
+    goto first_beach;
+  }
+
+  return false;
+
+first_beach:
+  fwrite(&d, sizeof(DBdata),1, f);
+  fclose(f);
+  return true;
+}
+
+
+
+int exist_in_file(FILE* f, DBdata d){
+  if (!f)
+    return false;
+
+  DBdata c;
+  int i = 0;
+  int d_ind = -1;
+  while (fread(&c, sizeof(DBdata),1,f) > 0){
+    if(strcmp(c.id, d.id) == 0 && !c.deleted)
+      return -2;
+    if (c.deleted)
+      d_ind = i;
+    i++;
+  }
+  printf("%d\n", d_ind);
+  return d_ind;
+}
+
+
+
+
+int delete_db(const char id[]){
+  FILE* f;
+  char *path = NULL;
+  int address;
+  path = (char*)malloc(strlen(getenv("HOME"))+strlen("/.config/first/.dat") + strlen(hashes.f_md5) + 1);
+  if (!path)
+    return 0;
+  strcpy(path,getenv("HOME"));
+  strcat(path,"/.config/first/");
+  strcat(path,hashes.f_md5);
+  strcat(path,".dat");
+  
+  f = fopen(path,"r+");
+  if(!f)
+    return 0;
+
+
+  DBdata c;
+  while (fread(&c, sizeof(DBdata),1,f) > 0){
+    if(strcmp(c.id, id) == 0){
+      if(c.deleted){
+        fclose(f);
+        return c.address;
+      }
+      fseek(f, -sizeof(DBdata), SEEK_CUR);
+      c.deleted = true;
+      fwrite(&c, sizeof(DBdata), 1, f);
+      fclose(f);
+      return c.address;
+    }
+  }
+  fclose(f);
+  return 0;
+}
+
+
+void read_db(){
+  FILE* f;
+  char *path = NULL;
+  int address;
+  char id[26];
+  path = (char*)malloc(strlen(getenv("HOME"))+strlen("/.config/first/.dat") + strlen(hashes.f_md5) + 1);
+  if (!path)
+    return;
+  strcpy(path,getenv("HOME"));
+  strcat(path,"/.config/first/");
+  strcat(path,hashes.f_md5);
+  strcat(path,".dat");
+
+  if( f = fopen(path,"r")){
+    DBdata c;
+    while (fread(&c, sizeof(DBdata),1,f) > 0){
+      printf("%s %d %d\n",c.id, c.address, c.deleted );
+    }
+    fclose(f);
+  }
+
 }

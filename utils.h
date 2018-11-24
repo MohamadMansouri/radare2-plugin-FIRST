@@ -57,12 +57,13 @@ typedef struct Metadata
 	char* comment; //The repeatable comment associated with the function // String (max_length = 512)
 	int segment; //The start address of the function's segment
 	int offset; //The function offset from the start of the segment
-	bool created; //True if the annotations were created by user
-	bool is_lib; //True if function is a library function
 	bool has_changed; //True if function metadata has changed
+	bool is_lib; //True if function is a library function
+	bool created; //True if the annotations were created by user
 	char* signature; //The opcodes associated with the function // String (base64 encoded)
 	int apis_size;
 	char** apis; //The APIs called by the function // List of Strings (max_string_length = 64)
+	// not used
 }Metadata;
 
 typedef struct MetadataServer
@@ -75,8 +76,8 @@ typedef struct MetadataServer
 	char* id; //The FIRST ID associated with this metadata
 	int rank; //The number of unqiue applies of this metadata
 	float similarity; //The percentage of similarity between this function and the original queried for function. This value can be very rough estimate depending on the engine.
+	char* engines;
 	// not used yet
-	//char* engines;
 	
 }MetadataServer;
 
@@ -90,16 +91,25 @@ typedef struct RespCreated
 }RespCreated;
 
 
+typedef struct DBdata
+{
+	char id[26];
+	int address;
+	bool deleted;
+}DBdata;
+
+
+
 // communication with server
-void send_g(action act, char* token, char* parms, size_t callback(void *ptr, size_t size, size_t nmemb, void *stream));
-void send_p(action act, char* token, char* parms, size_t callback(void *ptr, size_t size, size_t nmemb, void *stream));
+bool send_g(action act, char* token, char* parms, size_t callback(void *ptr, size_t size, size_t nmemb, void *stream));
+bool send_p(action act, char* token, char* parms, size_t callback(void *ptr, size_t size, size_t nmemb, void *stream));
 bool s_test_connection();
 void s_check_in(action act);
-void s_add(Metadata metadata[], int size, char* arch);
+bool s_add(Metadata metadata[], int size, char* arch);	
 void s_history(char** metadata_id, int size);
-bool s_applied(char* metadata_id);
+void s_applied(char* metadata_id);
 bool s_unapplied(char* metadata_id);
-bool s_delete(char* metadata_id);
+bool s_delete(const char* metadata_id);
 void s_get(char** metadata_id, int size);
 void s_scan(Metadata metadata);
 RespCreated s_created();
@@ -122,7 +132,7 @@ char** get_apis(RCore* core, RAnalFunction* fcn, int* size);
 char* get_prototype(RCore *core , RAnalFunction *fcn);
 char* get_comment(RCore* core, RAnalFunction *fcn);
 bool set_comment(RCore* core, RAnalFunction *fcn, const char* comment);
-
+Metadata* get_fcns_db(int *i);
 
 
 
@@ -131,5 +141,19 @@ bool set_comment(RCore* core, RAnalFunction *fcn, const char* comment);
 
 
 bool do_add(RCore *core,RAnalFunction *fcn);
-bool do_add_all(RCore* core, RList* fcns);
+bool do_add_all(RCore* core, RList* fcns, const char* comm);
+bool populate_fcn(RCore* core);
+void do_get();
+void do_delete(RCore* core, const char id[]);
+
+
+
+
+
+
+//DB
+bool save(DBdata d);
+int exist_in_file(FILE* f, DBdata d);
+void read_db();
+int delete_db(const char id[]);
 #endif
