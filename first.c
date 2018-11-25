@@ -29,7 +29,7 @@ static const char *help_msg_Fst[] = {
 "Fstgc", "", "get all created annotations saved in FIRST (this does not depend on the opened file)",
 "Fsth", " [addr]", "get annotation history of a function",
 "Fsthh", " [addr]", "get annotation history of a function that don't exist in this file (you can see all created annotations using Fstgc)",
-"Fst+", " [id]", "apply annotations",
+"Fst+", " [addr] [id]", "apply annotations",
 "Fsts", " [func]", "scan for similar functions in FIRST",
 "Fstsa", "", "scan all functions for similar functions in FIRST",
 NULL
