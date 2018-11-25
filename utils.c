@@ -18,9 +18,11 @@ binary_info hashes;
 const char* path[10] = {"api/test_connection", "api/sample/checkin","api/metadata/add","api/metadata/history","api/metadata/applied","api/metadata/unapplied","api/metadata/delete","api/metadata/created","api/metadata/get","api/metadata/scan"};
 CURL *curl;
 char* response = NULL;
-char* response_get = NULL;
-Metadata* pop_list = NULL;
-int num_fcn = 0;
+
+
+
+
+
 
 static int jsoneq(const char *json, jsmntok_t *tok, const char *s) {
   if (tok->type == JSMN_STRING && (int) strlen(s) == tok->end - tok->start &&
@@ -30,7 +32,32 @@ static int jsoneq(const char *json, jsmntok_t *tok, const char *s) {
   return -1;
 }
 
+char* print_repeater(char a[],int n){
+  for (int i = 0; i < n; ++i){
+      a[i] = '_';
+  }
+  a[n] = '\0';
+  return a;
+}
 
+
+char* parse_time(char a[]){
+  a[10] = ' ';  
+  for (int i = 19; i > 11; --i){
+    char tmp = a[i];
+    a[i] = a[i-1];
+  }
+  a[11]= '(';
+  a[20]= ')';
+  return a;
+}
+
+void print_line(int n){
+  for (int i = 0; i < n; ++i){
+    r_cons_printf("_");
+  }
+  r_cons_printf("\n");
+}
 
 static
 void dump(const char *text,
@@ -80,55 +107,70 @@ int debug_response(CURL *handle, curl_infotype type,
   return 0;
 }
 
-void dump_created_metadata(char* r, jsmntok_t* t, int j, RespCreated* resp_created){
+bool dump_created_metadata(char* r, jsmntok_t* t, int j, RespCreated* resp_created){
   for(int i=1;i<=(t->size)*2;i+=2){
 
     if(!jsoneq(r, t+i, "name") && (t+i+1)->type == JSMN_STRING){
       int size = (t+i+1)->end - (t+i+1)->start;
-      char* name = (char*) malloc(size);
+      char* name = (char*) malloc(size +1);
       if (name == NULL)
+        return false;
       strncpy(name,r+(t+i+1)->start,size);
       memset(name+size, '\0',1);
-      (resp_created->metadata+j)->name = name;
+      (resp_created->metadata+j)->name = strdup(name);
+      free(name);
       continue;
     }
     
     if(!jsoneq(r, t+i, "prototype") && (t+i+1)->type == JSMN_STRING){
       int size = (t+i+1)->end - (t+i+1)->start;
-      char* prototype = (char*) malloc(size);
+      char* prototype = (char*) malloc(size+1);
+      if (prototype == NULL)
+        return false;
       strncpy(prototype,r+(t+i+1)->start,size);
       memset(prototype+size, '\0',1);
-      (resp_created->metadata+j)->prototype = prototype;
+      (resp_created->metadata+j)->prototype = strdup(prototype);
+      free(prototype);
       continue;
     }
     
     if(!jsoneq(r, t+i, "comment") && (t+i+1)->type == JSMN_STRING){
       int size = (t+i+1)->end - (t+i+1)->start;
-      char* comment = (char*) malloc(size);
+      char* comment = (char*) malloc(size + 1);
+      if (comment == NULL)
+        return false;
       strncpy(comment,r+(t+i+1)->start,size);
       memset(comment+size, '\0',1);
-      (resp_created->metadata+j)->comment = comment;
+      (resp_created->metadata+j)->comment = strdup(comment);
+      free(comment);
       continue;
     }      
     
     if(!jsoneq(r, t+i, "rank") && (t+i+1)->type == JSMN_PRIMITIVE){
       int size = (t+i+1)->end - (t+i+1)->start;
-      char* rank = (char*) malloc(size);
+      char* rank = (char*) malloc(size +1 );
+      if (rank == NULL)
+        return false;
       strncpy(rank,r+(t+i+1)->start,size);
       memset(rank+size, '\0',1);
       (resp_created->metadata+j)->rank = atoi(rank);
+      free(rank);
       continue;
     }     
     
-    if(!jsoneq(r, t+i, "id") && (t+i+1)->type == JSMN_PRIMITIVE){
+    if(!jsoneq(r, t+i, "id") && (t+i+1)->type == JSMN_STRING){
       int size = (t+i+1)->end - (t+i+1)->start;
-      char* id = (char*) malloc(size);
+      char* id = (char*) malloc(size + 1);
+      if (id == NULL)
+        return false;
       strncpy(id,r+(t+i+1)->start,size);
       memset(id+size, '\0',1);
-      (resp_created->metadata+j)->id = id;
+      (resp_created->metadata+j)->id = strdup(id);
+      free(id);
       continue;
     }
-  }     
+  }
+  return true;     
 }
 RespCreated* dump_created(char* r, jsmntok_t* t){
   int i=1;
@@ -144,16 +186,16 @@ RespCreated* dump_created(char* r, jsmntok_t* t){
       strncpy(pages,r+(t+i+1)->start,size);
       memset(pages+size, '\0',1);
       resp_created->pages= atoi(pages);
-      i+=2;
+      i+=4;
       if (!jsoneq(r, t+i, "results") && (t+i+1)->type == JSMN_ARRAY && (t+i+1)->size){
         resp_created->size = (t+i+1)->size;
         resp_created->metadata = (MetadataServer*) malloc(sizeof(MetadataServer)*resp_created->size);
-        for(int j=0;j<resp_created->size;j++){
-          jsmntok_t* g = (t+i+j+2);
-          dump_created_metadata(r,g,j,resp_created);
-          (resp_created->metadata+j)->address=-1;
-          (resp_created->metadata+j)->creator=NULL;
-          (resp_created->metadata+j)->similarity=0;
+        int l = 0;
+        for(int j=1;j<(resp_created->size)*13;j+=13){
+          jsmntok_t* g = (t+i+j+1);
+          if(g->type == JSMN_OBJECT && !dump_created_metadata(r,g,l,resp_created))
+            return NULL;
+          l++;
         }
       }
       return resp_created;
@@ -315,12 +357,12 @@ void s_check_in (action act){
   }
 }
 
-void s_history(char** metadata_id, int size){ 
+bool s_history(const char** metadata_id, int size){ 
   char parms[strlen("metadata=[]") + 27*size + (size-1)];
   char tmp[28];
 
-  int MAX_history = 10;
-  int ntoken = 5 + (5 + 8*MAX_history)*size;
+  int MAX_history = 20;
+  int ntoken = 5 + (5 + 9*MAX_history)*size;
   jsmntok_t token[ntoken];
   jsmn_parser parser;
   jsmn_init(&parser);
@@ -339,27 +381,72 @@ void s_history(char** metadata_id, int size){
   }
   strcat(parms,"]");
   if(!send_p(f_history, f_server_config._api_key, parms, data_callback))
-    return;
+    return false;
   
   if (!response){
-    printf("Error receiving response from server!\n");
-    return NULL;
+    printf("history: error receiving response from server!\n");
+    return false;
   }
+
   int r = jsmn_parse(&parser, response, strlen(response), token, ntoken);
   
   if (token[0].type != JSMN_OBJECT){
-    printf("Error parsing response from server!\n");
+    printf("history: error parsing response from server!\n");
     free(response);
     response = NULL;
-    return NULL;
+    return false ;
   }
+  if(!jsoneq(response, &token[1], "failed") && token[2].type == JSMN_PRIMITIVE && *(response + token[2].start) == 'f' && !jsoneq(response, &token[3], "results")  && token[4].type == JSMN_OBJECT){
+    jsmntok_t* t = &token[8];
+  
+    r_cons_printf("| %5s%-16s | %17s%-23s | %25s%-35s | %31s%-39s |\n"," ","Committed"," ","Name"," ","Prototype"," ","Comment");
+    char a[73];
+    r_cons_printf("|%s", print_repeater(a,23));
+    r_cons_printf("|%s", print_repeater(a,42));
+    r_cons_printf("|%s", print_repeater(a,62));
+    r_cons_printf("|%s|\n", print_repeater(a,72));
+    for(int i = 1 ; i < (t->size)*9 ; i+=9){
 
-// TODO: implement the parser of the histoy
-  return NULL;
+      jsmntok_t* tt = t+i;
+      char name[41], proto[61], cmnt[71], time[22];
+      for(int j = 1 ; j < (tt->size)*2 ; j+=2){
+        int width=0;
+        if(!jsoneq(response, tt+j, "name") && (tt+j)->type == JSMN_STRING){
+          width = 40;
+          memcpy(name, response+(tt+j+1)->start, ((tt+j+1)->end - (tt+j+1)->start) > width ? width : ((tt+j+1)->end - (tt+j+1)->start));
+          name[((tt+j+1)->end - (tt+j+1)->start) > width ? width : ((tt+j+1)->end - (tt+j+1)->start)] = '\0';  
+        }
+        if(!jsoneq(response, tt+j, "prototype") && (tt+j)->type == JSMN_STRING){
+          width = 60;
+          memcpy(proto, response+(tt+j+1)->start, ((tt+j+1)->end - (tt+j+1)->start) > width ? width : ((tt+j+1)->end - (tt+j+1)->start));
+          proto[((tt+j+1)->end - (tt+j+1)->start) > width ? width : ((tt+j+1)->end - (tt+j+1)->start)] = '\0';
+        }
+        if(!jsoneq(response, tt+j, "comment") && (tt+j)->type == JSMN_STRING){
+          width = 70;
+          memcpy(cmnt, response+(tt+j+1)->start, ((tt+j+1)->end - (tt+j+1)->start) > width ? width : ((tt+j+1)->end - (tt+j+1)->start));
+          cmnt[((tt+j+1)->end - (tt+j+1)->start) > width ? width : ((tt+j+1)->end - (tt+j+1)->start)] = '\0';
+        }
+        if(!jsoneq(response, tt+j, "committed") && (tt+j)->type == JSMN_STRING){
+          width = 21;
+          memcpy(time, response+(tt+j+1)->start, ((tt+j+1)->end - (tt+j+1)->start) > width ? width : ((tt+j+1)->end - (tt+j+1)->start));
+          time[((tt+j+1)->end - (tt+j+1)->start) > width ? width : ((tt+j+1)->end - (tt+j+1)->start)] = '\0';
+        }
+      }    
+      r_cons_printf("| %-21.21s " ,parse_time(time));
+      r_cons_printf("| %-40.40s " ,name);
+      r_cons_printf("| %-60.60s " ,proto);
+      r_cons_printf("| %-70.70s |\n" ,cmnt);
+
+    }
+  }
+  free(response);
+  response = NULL;
+
+  return true;
 
 }
 
-void s_get(char** metadata_id, int size){
+void s_get(char** metadata_id,int* address, int size, MetadataServer* m){
   char parms[strlen("metadata=[]") + 27*size + (size-1)];
   char tmp[28];
 
@@ -391,7 +478,7 @@ void s_get(char** metadata_id, int size){
 
   int r = jsmn_parse(&parser, response, strlen(response), token, ntoken);
   
-  if (r != ntoken &&  token[0].type != JSMN_OBJECT){
+  if (token[0].type != JSMN_OBJECT){
     printf("get: error parsing response from server!\n");
     free(response);
     response = NULL;
@@ -406,103 +493,69 @@ void s_get(char** metadata_id, int size){
       char id[sz + 1];
       strncpy(id,response+(t+i)->start,sz);
       id[sz] = '\0';
-      r_cons_printf("%-25.25s", id);
+      int k;
+      for (k = 0; k < size; ++k)
+        if( strstr(*(metadata_id+k), id))
+          break;
+      if(k == size)
+        return;
+      if (address)
+        r_cons_printf("| 0x%08x |", *(address+k));
+  
       jsmntok_t* tt = t+i+1;
       for(int j = 1 ; j < (tt->size)*2 ; j+=2){
         int width=0;
-        if(!jsoneq(response, tt+j, "name") && (tt+j)->type == JSMN_STRING)
-          width = 50;
-        if(!jsoneq(response, tt+j, "prototype") && (tt+j)->type == JSMN_STRING)
-          width = 50;
-        if(!jsoneq(response, tt+j, "comment") && (tt+j)->type == JSMN_STRING)
-          width = 50;
+        if(!jsoneq(response, tt+j, "name") && (tt+j)->type == JSMN_STRING){
+          if (m){
+            int size = (tt+j+1)->end - (tt+j+1)->start ;
+            m->name = malloc(size+1);
+            if (!m->name)
+              return;
+            memcpy(m->name, response+(tt+j+1)->start, size);
+            memset(m->name + size,'\0', 1);
+          }
+          width = 40;
+        }
+        if(!jsoneq(response, tt+j, "prototype") && (tt+j)->type == JSMN_STRING){
+          if (m){
+            int size = (tt+j+1)->end - (tt+j+1)->start ;
+            m->prototype = malloc(size+1);
+            if (!m->prototype)
+              return;
+            memcpy(m->prototype, response+(tt+j+1)->start, size);
+          }
+          width = 60;
+        }
+        if(!jsoneq(response, tt+j, "comment") && (tt+j)->type == JSMN_STRING){
+          if (m){
+            int size = (tt+j+1)->end - (tt+j+1)->start ;
+            m->comment = malloc(size+1);
+            if (!m->comment)
+              return;
+            memcpy(m->comment, response+(tt+j+1)->start, size);
+          }
+          width = 70;
+        }
         if(!jsoneq(response, tt+j, "creator") && (tt+j)->type == JSMN_STRING)
           width = 20;
         if(!jsoneq(response, tt+j, "rank")&& (tt+j)->type == JSMN_STRING)
-          width = 2;
-        if(width)
-          r_cons_printf("\t%-*.*s", width, ((tt+j+1)->end - (tt+j+1)->start) > width ? width : ((tt+j+1)->end - (tt+j+1)->start) ,response+(tt+j+1)->start );
-      }    
-      r_cons_printf("\n");
+          width = 4;
+        if(width && !m)
+          r_cons_printf(" %-*.*s |", width, ((tt+j+1)->end - (tt+j+1)->start) > width ? width : ((tt+j+1)->end - (tt+j+1)->start) ,response+(tt+j+1)->start );
+      }
+      if(!m)     
+        r_cons_printf("\n");
+
     }
   }
+  else
+    eprintf("failed to get data");
   free(response);
   response = NULL;
 
 }
 
-RespCreated s_created(){
-  printf("retreiving created metadata...\n");
-  int page = 1;
-  int pages = 0;
-  int first_time = true;
-
-  int ntoken = 9 + 12*20;
-  jsmntok_t token[ntoken];
-  jsmn_parser parser;
-  jsmn_init(&parser);
-
-  int total_size=0;
-  RespCreated* resp_created;
-  RespCreated metadata_array; 
-  metadata_array.size = 0;
-  metadata_array.metadata = NULL;
-  while(first_time || page<=pages){
-   
-    char parms[2];
-    parms[0] = '/';
-    parms[1] = page + '0';
-    if(!send_g(f_created,f_server_config._api_key,parms,data_callback))
-      return metadata_array;
-
-    
-    if (!response){
-      printf("Error receiving response from server!\n");
-      break;
-    }
-    
-    int r = jsmn_parse(&parser, response, strlen(response), token, ntoken);
-    
-    if (token[0].type != JSMN_OBJECT){
-      printf("Error parsing response from server!\n");
-      free(response);
-      response = NULL;
-      break;
-    }
-
-    resp_created = dump_created(response,token);
-      
-    if (resp_created == NULL){
-      printf("Malformed response!\n");
-      free(response);
-      response = NULL;
-      break;
-    }
-    else{
-      if(first_time)
-        pages = resp_created->pages;
-      
-      if(resp_created->metadata && resp_created->size){
-        total_size += resp_created->size;
-        metadata_array.metadata = (MetadataServer*)realloc(metadata_array.metadata,sizeof(MetadataServer)*total_size);
-        if (metadata_array.metadata){
-          memcpy((metadata_array.metadata)+ metadata_array.size , resp_created->metadata , resp_created->size);
-          metadata_array.size = total_size;
-        }
-      }
-    }
-    page++;
-    if (first_time)
-      first_time =false;
-    
-    free(resp_created);       
-    free(response);
-    response = NULL;
-
-
-  }
-  return metadata_array;
-}
+  
 
 bool s_add(Metadata metadata[], int size, char* arch){
   int ntoken = 5 + size*2;
@@ -523,15 +576,15 @@ bool s_add(Metadata metadata[], int size, char* arch){
     // r_cons_printf("\tname = %s\n", m.name );
 
     int s = snprintf(NULL,0,"\"%d\": {\"comment\": \"%s\", \"opcodes\": \"%s\", \"name\": \"%s\", \"apis\" : [%s] , \"architecture\": \"%s\", \"prototype\": \"%s\"}",\
-       m.address, m.comment, m.signature, m.name, "%s" , arch, m.prototype);
+      m.address, m.comment, m.signature, m.name, "%s" , arch, m.prototype);
     char* functions = malloc(s+5);
     if (!functions)
       return false;
     if (!m.apis_size)
-      snprintf(functions,s+1,"\"%d\": {\"comment\": \"%s\", \"opcodes\": \"%s\", \"name\": \"%s\", \"apis\" : [%s] , \"architecture\": \"%s\", \"prototype\": \"%s\"}",\ 
+      snprintf(functions,s+1,"\"%d\": {\"comment\": \"%s\", \"opcodes\": \"%s\", \"name\": \"%s\", \"apis\" : [%s] , \"architecture\": \"%s\", \"prototype\": \"%s\"}",\
         m.address, m.comment, m.signature, m.name, "" , arch, m.prototype);
     else{
-      snprintf(functions,s+1,"\"%d\": {\"comment\": \"%s\", \"opcodes\": \"%s\", \"name\": \"%s\", \"apis\" : [%s] , \"architecture\": \"%s\", \"prototype\": \"%s\"}",\ 
+      snprintf(functions,s+1,"\"%d\": {\"comment\": \"%s\", \"opcodes\": \"%s\", \"name\": \"%s\", \"apis\" : [%s] , \"architecture\": \"%s\", \"prototype\": \"%s\"}",\
         m.address, m.comment, m.signature, m.name, "%s" , arch, m.prototype);
       
       int aps = snprintf(NULL, 0 ,"\"%s\"", m.apis[0]);
@@ -565,7 +618,6 @@ bool s_add(Metadata metadata[], int size, char* arch){
       strcat(functions, ", %s");
       l+=4;      
     }
-    //   // printf("%d %d %s\n",as, strlen(at), at );
     char* tmp = malloc(l+1);
     if(!tmp )
       return false;
@@ -579,15 +631,14 @@ bool s_add(Metadata metadata[], int size, char* arch){
   }
 if(!send_p(f_add,f_server_config._api_key, parms, data_callback))
   return false;
-// printf("%s\n", parms);
 free(parms);
 if (!response){
-  printf("add : error receiving response from server!\n");
+  eprintf("add : error receiving response from server!\n");
   return false;
   }
   int r = jsmn_parse(&parser, response, strlen(response), token, ntoken);
   if (r !=ntoken || token[0].type != JSMN_OBJECT){
-    printf("add: error parsing response from server!\n");
+    eprintf("add: error parsing response from server!\n");
     free(response);
     response = NULL;
     return false;
@@ -605,9 +656,8 @@ if (!response){
         addr[sz1] = '\0';
         id[sz2] = '\0';
         int addr_int = atoi(addr);
-        
-        // printf("%d\n", t->size);
-        // s_applied(id);
+
+        s_applied(id);
 
         DBdata d;
         strncpy(d.id, id,25);
@@ -615,36 +665,7 @@ if (!response){
         d.address = addr_int;
         d.deleted = false;
         save(d);
-        if (!pop_list)
-          return false;
 
-        int j,k;
-        for (j=0; j< num_fcn; ++j){
-          if((pop_list+j)->address == addr_int)
-            break;
-        }
-        if(j == num_fcn)
-          continue;
-
-        for (k=0; k< size; ++k){
-          if(metadata[k].address == addr_int)
-            break;
-        }
-        if(k == size)
-          continue;        
-
-       if((pop_list + j)->name = malloc(strlen(metadata[k].name)+1))
-          strcpy((pop_list + j)->name ,metadata[k].name);
-       if((pop_list + j)->signature = malloc(strlen(metadata[k].signature)+1))
-          strcpy((pop_list + j)->signature ,metadata[k].signature);
-       if((pop_list + j)->comment = malloc(strlen(metadata[k].comment)+1))
-          strcpy((pop_list + j)->comment ,metadata[k].comment);
-       if((pop_list + j)->prototype = malloc(strlen(metadata[k].prototype)+1))
-          strcpy((pop_list + j)->prototype ,metadata[k].prototype);
-       if((pop_list + j)->id = malloc(strlen(id)+1))
-          strcpy((pop_list + j)->id ,id);
-        (pop_list + j)->offset = (pop_list + j)->address - (pop_list + j)->segment;
-        (pop_list + j)->created = true;
       }
     }
     free(response);
@@ -657,11 +678,217 @@ if (!response){
 
 }
 
-void s_scan(Metadata metadata){
-  
+bool s_scan(Metadata metadata[], int size, char* arch ){
+  int MAX_scan = 20;
+  int MAX_engines = 10;
+  int ntoken = 9 + 2 * MAX_engines + size*(2 + 17 * MAX_scan);
+  jsmntok_t token[ntoken];
+  jsmn_parser parser;
+  jsmn_init(&parser);
+
+  int l = snprintf(NULL,0, "md5=%s&crc32=%d&functions={%s}", hashes.f_md5, hashes.f_crc32);
+  char* parms = malloc(l+1);
+  if(!parms )
+    return false;
+  snprintf(parms,l+1,"md5=%s&crc32=%d&functions={%s}",hashes.f_md5, hashes.f_crc32,"%s");
+
+  for (int i=0; i< size; i++){ 
+    Metadata m = metadata[i];
+
+
+    int s = snprintf(NULL,0,"\"%d\": {\"opcodes\": \"%s\", \"architecture\": \"%s\", \"apis\" : [%s]}",\
+      m.address,  m.signature, arch, "%s" );
+    char* functions = malloc(s+5);
+    if (!functions)
+      return false;
+    if (!m.apis_size)
+      snprintf(functions,s+1,"\"%d\": {\"opcodes\": \"%s\", \"architecture\": \"%s\", \"apis\" : [%s]}",\
+        m.address,m.signature, arch,"" );
+    else{
+      snprintf(functions,s+1,"\"%d\": {\"opcodes\": \"%s\", \"architecture\": \"%s\", \"apis\" : [%s]}",\
+        m.address,m.signature, arch, "%s");      
+
+      int aps = snprintf(NULL, 0 ,"\"%s\"", m.apis[0]);
+      char* apis = malloc(aps+7);
+      if(!apis)
+        return false;
+      snprintf(apis,aps+1 ,"\"%s\"" ,m.apis[0]);
+      for (int ap=1; ap < m.apis_size; ++ap){
+        strcat(apis, ", \"%s\"");
+        aps = snprintf(NULL,0,apis, m.apis[ap]);
+        char* apis_tmp = malloc(aps +1);
+        snprintf(apis_tmp,aps+1,apis, m.apis[ap]);
+        apis = realloc(apis, aps+7);
+        strcpy(apis,apis_tmp);
+        free(apis_tmp);
+      }
+
+      int as = snprintf(NULL,0,functions, apis);
+      char* at = malloc(as+1);
+      if(!at)
+        return false;
+      snprintf(at,as+1, functions, apis);
+      functions = realloc(functions, as+5);
+      strcpy(functions, at);
+      free(at);
+    }      
+      
+    l = snprintf(NULL,0,parms,functions);
+
+    if (i < size - 1){
+      strcat(functions, ", %s");
+      l+=4;      
+    }
+    char* tmp = malloc(l+1);
+    if(!tmp )
+      return false;
+    snprintf(tmp,l+1,parms, functions);
+    parms = realloc(parms, l+1);
+    if (!parms)
+      return false;
+    strncpy(parms,tmp,l+1);
+    free(tmp);
+    free(functions);
+  }
+
+if(!send_p(f_scan,f_server_config._api_key, parms, data_callback))
+  return false;
+free(parms);
+if (!response){
+  eprintf("scan : error receiving response from server!\n");
+  return false;
+  }
+  int r = jsmn_parse(&parser, response, strlen(response), token, ntoken);
+  if (token[0].type != JSMN_OBJECT){
+    eprintf("scan: error parsing response from server!\n");
+    free(response);
+    response = NULL;
+    return false;
+  }
+
+  if(!jsoneq(response, &token[1], "failed") && token[2].type == JSMN_PRIMITIVE && *(response + token[2].start) == 'f' && !jsoneq(response, &token[3], "results")  && token[4].type == JSMN_OBJECT){
+    jsmntok_t* t = &token[6];
+    int fnc_count = t->size;
+    t++;
+    while(fnc_count){
+      int seen = 0;
+      bool incremented = false;
+      int size = (t)->end - (t)->start;
+      char address[size+1];
+      memcpy(address, response + t->start, size);
+      address[size] = '\0';
+      int addr = atoi(address);
+      
+      print_line(150);
+      r_cons_printf("Address = 0x%08x\t", addr);
+      
+      t = t+1;
+      int i = 2;
+      int array_size = t->size;
+      r_cons_printf("Matches = %d\n", array_size);
+      print_line(150);
+      while (seen != array_size){
+        if (incremented){
+          print_line(150);
+          incremented = false;
+        }
+
+
+        if(!jsoneq(response, t+i, "comment")){
+          size = (t+i+1)->end - (t+i+1)->start;
+          char comment[size+1];
+          memcpy(comment, response + (t+i+1)->start, size);
+          comment[size] = '\0';
+          i+=2;
+          r_cons_printf("\t| %-12s | %s\n","Comment", comment);
+        }
+        if(!jsoneq(response, t+i, "name")){
+          size = (t+i+1)->end - (t+i+1)->start;
+          char name[size+1];
+          memcpy(name, response + (t+1+i)->start, size);
+          name[size] = '\0';
+          i+=2;
+          r_cons_printf("\t| %-12s | %s\n","Name", name);
+        }
+        if(!jsoneq(response, t+i, "creator")){
+          size = (t+i+1)->end - (t+i+1)->start;
+          char creator[size+1];
+          memcpy(creator, response + (t+i+1)->start, size);
+          creator[size] = '\0';
+          i+=2;
+          r_cons_printf("\t| %-12s | %s\n","Creator", creator);
+        }
+        if(!jsoneq(response, t+i, "similarity")){
+          size = (t+i+1)->end - (t+i+1)->start;
+          char similarity[size+1];
+          memcpy(similarity, response + (t+i+1)->start, size);
+          similarity[size] = '\0';
+          i+=2;
+          r_cons_printf("\t| %-12s | %s\n","Similarity", similarity);
+        }
+        if(!jsoneq(response, t+i, "rank")){
+          size = (t+i+1)->end - (t+i+1)->start;
+          char rank[size+1];
+          memcpy(rank, response + (t+1+i)->start, size);
+          rank[size] = '\0';
+          i+=2;
+          r_cons_printf("\t| %-12s | %s\n","Rank", rank);
+        }
+        if(!jsoneq(response, t+i, "prototype")){
+          size = (t+i+1)->end - (t+i+1)->start;
+          char prototype[size+1];
+          memcpy(prototype, response + (t+i+1)->start, size);
+          prototype[size] = '\0';
+          i+=2;
+          r_cons_printf("\t| %-12s | %s\n","Prototype", prototype);
+        }
+        if(!jsoneq(response, t+i, "engines")){
+          r_cons_printf("\t| %-12s | ","Engines");
+          int eng_count = (t+i+1)->size;
+          for (int k = 1 ; k <= eng_count; k++){
+            size = (t+i+1+k)->end - (t+i+1+k)->start;
+            char eng[size+1];
+            memcpy(eng, response + (t+i+1+k)->start, size);
+            eng[size] = '\0';
+            r_cons_printf("%s\t", eng);
+
+          }
+          i+=(eng_count+2);
+          r_cons_printf("\n");
+        }
+        if(!jsoneq(response, t+i, "id")){
+          incremented = true;
+          seen++;
+          size = (t+i+1)->end - (t+i+1)->start;
+          char id[size+1];
+          memcpy(id, response + (t+i+1)->start, size);
+          id[size] = '\0';
+          seen == array_size ? (i+=2) : (i+=3);
+          r_cons_printf("\t| %-12s | %s\n","ID", id);
+        }
+      }
+      if(array_size)
+        t += i;
+      else 
+        t += 1;
+
+      fnc_count--;
+      r_cons_printf("\n");
+    }
+    free(response);
+    response = NULL;
+    return true;
+  }
+  free(response);
+  response = NULL;
+  return false;
 }
 
-void s_applied(char* metadata_id){
+
+
+
+
+void s_applied(const char* metadata_id){
   int ntoken = 5;
   jsmntok_t token[ntoken];
   jsmn_parser parser;
@@ -672,26 +899,6 @@ void s_applied(char* metadata_id){
 
   if(!send_p(f_applied,f_server_config._api_key, parms, data_callback))
     return;
-
-  //   if (!response){
-  //     printf("applied : error receiving response from server!\n");
-  //     return false;
-  //   }
-
-  // int r = jsmn_parse(&parser, response, strlen(response), token, ntoken);
-  // if (r !=ntoken || token[0].type != JSMN_OBJECT){
-  //   printf("applied: error parsing response from server!\n");
-  free(response);//   
-  response = NULL;
-  //   return false;
-  // }
-  // if(!jsoneq(response, &token[1], "failed") && token[2].type == JSMN_PRIMITIVE && *(response + token[2].start) == 'f' && !jsoneq(response, &token[3], "results")  && token[4].type == JSMN_PRIMITIVE && *(response + token[4].start) == 't'){
-  //   free(response);
-  response=NULL;
-  //   return true;
-  // }
-
-  // return false;
 
 }
 
@@ -815,8 +1022,18 @@ bool f_set_config()
   homedir = (char*)malloc(strlen(getenv("HOME"))+strlen("/.config/first/first.config"));
   strcpy(homedir,getenv("HOME"));
   
-  if (ini_parse(strcat(homedir,"/.config/first/first.config"), handler, &f_server_config) < 0) {
-        printf("Can't load configuration file!\n");
+  DIR* dir;
+  
+  dir = opendir(strcat(homedir,"/.config/first"));
+
+  if (!dir){
+    printf("Can't load configuration file!\n");
+    return false;
+  }
+  closedir(dir);
+
+  if (ini_parse(strcat(homedir,"/first.config"), handler, &f_server_config) < 0) {
+        eprintf("Can't load configuration file!\n");
         return false;
     }
   return true;
@@ -994,14 +1211,6 @@ bool set_comment(RCore *core, RAnalFunction *fcn, const char* comment){
 }
 
 
-Metadata* get_fcns_db(int *i){
-  *i= num_fcn;
-  return pop_list;
-}
-
-
-
-
 
 
 
@@ -1081,64 +1290,99 @@ bool do_add_all(RCore* core, RList* fcns, const char* comm){
 }
 
 
-bool populate_fcn(RCore* core){
+bool do_scan(RCore* core, RAnalFunction *fcn){
+  Metadata m;
+  m.address = (int)fcn->addr;
+  char* opcodes = get_signature(core, fcn);
+  m.signature = r_base64_encode_dyn(opcodes,strlen(opcodes));
+  int size = 0;
+  m.apis = get_apis(core, fcn, &size);
+  m.apis_size = size;
   
-  if (pop_list)
-    return true;
+  Metadata metadata[1];
+  metadata[0] = m;
+  s_scan(metadata,1, get_arch(core)); 
+  for (int i = 0; i < size; ++i)
+    free(m.apis[i]);
+  free(m.apis);
+}
 
-  RList* fcns = core->anal->fcns;
-  pop_list = (Metadata*)malloc(sizeof(Metadata) * fcns->length);
-  num_fcn = fcns->length;
-  if(!num_fcn)
-    return false;
+
+bool do_scan_all(RCore* core, RList* fcns){
   RListIter *iter;
   RAnalFunction *fcn;
-  RBinSection* section;
-  RBinObject* obj;
-  obj = r_bin_cur_object(core->bin);
+  Metadata metadata[fcns->length];
   int i = 0;
   r_list_foreach (fcns, iter, fcn) {
-    (pop_list + i)->original_name = malloc(strlen(fcn->name) + 1);
-    strcpy((pop_list + i)->original_name , fcn->name);
-    (pop_list + i)->address = (int)fcn->addr;
-    section = obj? r_bin_get_section_at (obj, fcn->addr, 1): NULL;
-    (pop_list + i)->segment = section ? (int)section->vaddr : 0;
-    i++;
+    Metadata m;
+    m.address = (int)fcn->addr;
+    char* opcodes = get_signature(core, fcn);
+    m.signature = r_base64_encode_dyn(opcodes,strlen(opcodes));
+    int size = 0;
+    m.apis = get_apis(core, fcn, &size);
+    m.apis_size = size;
+    
+    metadata[i++] = m;
+    // make max 20  
   }
-  return true;
+  int j = 0;
+  while (i > 0){
+    s_scan(&metadata[j], i > 19? 20 : i ,get_arch(core));
+    j += 20;
+    i -= 20;
+  }
+
+
+  for (int i=0; i < fcns->length; ++i){
+    for (int j = 0; j < metadata[i].apis_size ; ++j)
+      free(metadata[i].apis[j]);
+    free(metadata[i].apis);
+  }
 }
+
 
 
 
 void do_get(){
   FILE* f;
-  char *path = NULL;
+  char *db_path = NULL;
   int address;
   char id[26];
-  path = (char*)malloc(strlen(getenv("HOME"))+strlen("/.config/first/.dat") + strlen(hashes.f_md5) + 1);
-  if (!path)
+  db_path = (char*)malloc(strlen(getenv("HOME"))+strlen("/.config/first/db/.dat") + strlen(hashes.f_md5) + 1);
+  if (!db_path)
     return;
-  strcpy(path,getenv("HOME"));
-  strcat(path,"/.config/first/");
-  strcat(path,hashes.f_md5);
-  strcat(path,".dat");
+  strcpy(db_path,getenv("HOME"));
+  strcat(db_path,"/.config/first/db/");
+  strcat(db_path,hashes.f_md5);
+  strcat(db_path,".dat");
 
-  if( f = fopen(path,"r")){
+  if( f = fopen(db_path,"r")){
     int i = 0;
+    int* addr = NULL;
     char** mid = NULL;
     DBdata c;
-    r_cons_printf("%-25s\t%-50s\t%-50s\t%-20s\t%-2s\t%-50s\n","ID","Comment","Name","Creator","Rank","Prototype");
-
-    while (fread(&c, sizeof(DBdata),1,f) > 0 && !c.deleted){
+    r_cons_printf("| %2s%-8s | %32s%-38s | %18s%-22s | %7s%-13s | %4s | %26s%-34s |\n"," ","Address"," ","Comment"," ","Name"," ","Creator","Rank"," ","Prototype");
+    char a[83];
+    r_cons_printf("|%s", print_repeater(a,12));
+    r_cons_printf("|%s", print_repeater(a,72));
+    r_cons_printf("|%s", print_repeater(a,42));
+    r_cons_printf("|%s", print_repeater(a,22));
+    r_cons_printf("|%s", print_repeater(a,6));
+    r_cons_printf("|%s|\n", print_repeater(a,62));
+    while (fread(&c, sizeof(DBdata),1,f) > 0 ){
+      if (c.deleted)
+        continue;
+      addr = (int*)realloc( addr ,sizeof(int) * (i+1));
       mid = (char**)realloc( mid ,sizeof(char*) * (i+1));
       *(mid + i) = malloc(strlen(c.id)+1);
+      *(addr + i) = c.address;
       strcpy( *(mid + i), c.id);
       ++i;
     }
     fclose(f);
     int j = 0;
     while (i > 0){
-      s_get(&mid[j], i > 19? 20 : i);
+      s_get(&mid[j] ,&addr[j], i > 19? 20 : i,NULL);
       j += 20;
       i -= 20;
     }
@@ -1152,34 +1396,209 @@ void do_get(){
 
 
 
-void do_delete(RCore* core,const char id[]){
-  if(s_delete(id)){
-    int address = delete_db(id);
-    if (address){
-      RAnalFunction* fcn = r_anal_get_fcn_at(core->anal, (ut64)address,0);
+void do_delete(RCore* core,const int addr){
+
+
+  char* id = delete_db(addr);
+  if (id && s_delete(id)){
+    RAnalFunction* fcn = r_anal_get_fcn_at(core->anal, (ut64)addr,0);
+    if (fcn)
       r_cons_printf("Annotations of function %s of address 0x%08x are deleted\n", fcn->name, fcn->addr);
+    else 
+      r_cons_printf("Annotations of function of address 0x%08x are deleted\n", addr);
+    free(id);
+    return;
+  }
+  if(id)
+    free(id);
+  r_cons_printf("Deletion failed\n");
+}
+
+
+void do_delete_id(const char* id){
+  if(delete_db_unknown_file(id)){
+    if(s_delete(id))
+      r_cons_printf("Succesfully deleted\n");
+  }
+  else{
+    r_cons_printf("Function don't exist\n");
+    r_cons_printf("Deletion failed\n");
+  }
+
+}
+
+
+void do_history(const int addr){
+ 
+  char* id = check_db(addr);
+
+  if (id){
+    const char* mid[1];
+    mid[0] = id;
+    if(s_history(mid, 1)){
+  
+    }
+  free(id);
+  }
+  else
+    r_cons_printf("ID is not identified\n");
+
+}
+
+
+void do_history_id(const char* id){
+  if(check_db_unknown_file(id)){
+    const char* mid[1];
+    mid[0] = id;
+    if(s_history(mid, 1)){
+
     }
   }
-  r_cons_printf("deletion failed\n");
+  else
+    r_cons_printf("ID is not identified\n");
+}
+
+
+
+void do_created(){
+  r_cons_printf("| %12s%-13s | %4s | %22s%-23s | %30s%-30s | %40s%-40s |\n"," ","ID","Rank"," ","Name"," ","Prototype"," ","Comment");
+  char a[83];
+  r_cons_printf("|%s", print_repeater(a,27));
+  r_cons_printf("|%s", print_repeater(a,6));
+  r_cons_printf("|%s", print_repeater(a,47));
+  r_cons_printf("|%s", print_repeater(a,62));
+  r_cons_printf("|%s|\n", print_repeater(a,82));
+  int page = 1;
+  int pages = 0;
+  int first_time = true;
+
+
+  int total=0;
+  RespCreated* resp_created;
+  while(first_time || page<=pages){
+    
+    int ntoken = 9 + 13*20;
+    jsmntok_t token[ntoken];
+    jsmn_parser parser;
+    jsmn_init(&parser);
+
+    char parms[5];
+    parms[0] = '/';
+    sprintf(parms+1, "%d", page);
+
+    if(!send_g(f_created,f_server_config._api_key,parms,data_callback))
+      return;
+    
+    if (!response){
+      printf("created: error receiving response from server!\n");
+      break;
+    }
+    int r = jsmn_parse(&parser, response, strlen(response), token, ntoken);
+    
+    if (token[0].type != JSMN_OBJECT){
+      printf("created: error parsing response from server!\n");
+      free(response);
+      response = NULL;
+      break;
+    }
+
+    resp_created = dump_created(response,token);
+      
+    if (resp_created == NULL){
+      printf("created: malformed page!\n");
+      free(response);
+      response = NULL;
+      break;
+    }
+
+    if(first_time)
+      pages = resp_created->pages;
+
+    if(resp_created->metadata && resp_created->size){
+      for (int i = 0; i < resp_created->size; ++i){
+        r_cons_printf("| %-25s | %-4.4d | %-45.45s | %-60.60s | %-80.80s |\n",(resp_created->metadata+i)->id,(resp_created->metadata+i)->rank,(resp_created->metadata+i)->name,(resp_created->metadata+i)->prototype,(resp_created->metadata+i)->comment);
+        free((resp_created->metadata+i)->name);
+        free((resp_created->metadata+i)->prototype);
+        free((resp_created->metadata+i)->comment);
+        free((resp_created->metadata+i)->id);
+        total++;
+      }
+      free(resp_created->metadata);
+      resp_created->size = 0;
+
+    }
+    free(resp_created); 
+    resp_created = NULL;      
+    page++;
+    if (first_time)
+      first_time =false;
+    
+    free(response);
+    response = NULL;
+
+
+  }
+  r_cons_printf("\nTotal = %d\n", total);
 }
 
 
 
 
+void do_apply(RCore* core,const char* id, int addr){
+  char* mid[1];
+  mid[0] = id;
+  MetadataServer m;
+  s_get(mid,NULL,1,&m);
+  if (m.comment || m.name || m.prototype){
+
+    char cmd[100];
+    if (m.comment){
+      sprintf(cmd, "CCu %.80s @ 0x%08x", m.comment, addr); 
+      r_core_cmd0(core, cmd);
+      free(m.comment);
+    }
+    
+    if (m.name){
+      sprintf(cmd, "afn %.80s @ 0x%08x\0", m.name, addr); 
+      r_core_cmd0(core, cmd);
+      free(m.name);
+
+    }
+
+    if (m.prototype){
+      printf("%s\n", m.prototype);
+      sprintf(cmd, "CC+ \\n prototype = %.80s @ 0x%08x", m.prototype, addr); 
+      r_core_cmd0(core, cmd);
+      free(m.prototype);
+    }
+
+    s_applied(id);
+
+    delete_db(addr);
+    
+    DBdata d;
+    strncpy(d.id, id,25);
+    d.id[25]= '\0';
+    d.address = addr;
+    d.deleted = false;
+    save(d);
+    r_cons_printf("Annotations applied to function of address 0x%08x\n", addr);
+  }
+
+
+}
+
+
 bool save(DBdata d){
   FILE* f;
-  char *path = NULL;
-  int address;
-  path = (char*)malloc(strlen(getenv("HOME"))+strlen("/.config/first/.dat") + strlen(hashes.f_md5) + 1);
-  if (!path)
-    return false;
-  strcpy(path,getenv("HOME"));
-  strcat(path,"/.config/first/");
-  strcat(path,hashes.f_md5);
-  strcat(path,".dat");
+  char db_path[strlen(getenv("HOME"))+strlen("/.config/first/db/.dat") + strlen(hashes.f_md5) + 1];
+  strcpy(db_path,getenv("HOME"));
+  strcat(db_path,"/.config/first/db/");
+  strcat(db_path,hashes.f_md5);
+  strcat(db_path,".dat");
   
 
-  if(f = fopen(path,"r+")){
+  if(f = fopen(db_path,"r+")){
     
     int exist = exist_in_file(f,d);
     if( exist == -2){
@@ -1197,7 +1616,7 @@ bool save(DBdata d){
     
   }
 
-  if(f = fopen(path,"w+")){
+  if(f = fopen(db_path,"w+")){
     goto first_beach;
   }
 
@@ -1225,68 +1644,204 @@ int exist_in_file(FILE* f, DBdata d){
       d_ind = i;
     i++;
   }
-  printf("%d\n", d_ind);
   return d_ind;
 }
 
 
 
 
-int delete_db(const char id[]){
+char* delete_db(const int addr){
   FILE* f;
-  char *path = NULL;
-  int address;
-  path = (char*)malloc(strlen(getenv("HOME"))+strlen("/.config/first/.dat") + strlen(hashes.f_md5) + 1);
-  if (!path)
-    return 0;
-  strcpy(path,getenv("HOME"));
-  strcat(path,"/.config/first/");
-  strcat(path,hashes.f_md5);
-  strcat(path,".dat");
+  char db_path[strlen(getenv("HOME"))+strlen("/.config/first/db/.dat") + strlen(hashes.f_md5) + 1];
+  strcpy(db_path,getenv("HOME"));
+  strcat(db_path,"/.config/first/db/");
+  strcat(db_path,hashes.f_md5);
+  strcat(db_path,".dat");
   
-  f = fopen(path,"r+");
+  f = fopen(db_path,"r+");
   if(!f)
-    return 0;
+    return NULL;
 
 
   DBdata c;
   while (fread(&c, sizeof(DBdata),1,f) > 0){
-    if(strcmp(c.id, id) == 0){
+    if(c.address == addr){
       if(c.deleted){
         fclose(f);
-        return c.address;
+        return NULL;
       }
       fseek(f, -sizeof(DBdata), SEEK_CUR);
       c.deleted = true;
       fwrite(&c, sizeof(DBdata), 1, f);
       fclose(f);
-      return c.address;
+      char* id = strdup(c.id);
+      return id;
     }
   }
   fclose(f);
-  return 0;
+  return NULL;
 }
 
 
-void read_db(){
-  FILE* f;
-  char *path = NULL;
-  int address;
-  char id[26];
-  path = (char*)malloc(strlen(getenv("HOME"))+strlen("/.config/first/.dat") + strlen(hashes.f_md5) + 1);
-  if (!path)
-    return;
-  strcpy(path,getenv("HOME"));
-  strcat(path,"/.config/first/");
-  strcat(path,hashes.f_md5);
-  strcat(path,".dat");
 
-  if( f = fopen(path,"r")){
+
+
+
+
+bool delete_db_unknown_file(const char id[]){
+
+  char db_path[strlen(getenv("HOME"))+strlen("/.config/first/db/") + 1];
+  strcpy(db_path,getenv("HOME"));
+  strcat(db_path,"/.config/first/db/");
+
+  FILE* f;
+  DIR* dir;
+  struct dirent *dptr = NULL;
+  
+  dir = opendir(db_path);
+  if (!dir)
+    return false;
+
+  bool found = false;
+  while(!found && (dptr = readdir(dir)) != NULL){
+
+    if(!strcmp (dptr->d_name, "..") || !strcmp (dptr->d_name, "."))
+        continue;
+    char pth[strlen(db_path)+ strlen(hashes.f_md5) + 1];
+    strcpy(pth,db_path);
+    f = fopen(strcat(pth,dptr->d_name), "r+");
+    
+    if(!f)
+      continue;
+
     DBdata c;
-    while (fread(&c, sizeof(DBdata),1,f) > 0){
-      printf("%s %d %d\n",c.id, c.address, c.deleted );
+    while (!found ,fread(&c, sizeof(DBdata),1,f) > 0){
+      
+      if(strcmp(c.id, id) == 0 && !c.deleted){
+
+        fseek(f, -sizeof(DBdata), SEEK_CUR);
+        c.deleted = true;
+        fwrite(&c, sizeof(DBdata), 1, f);
+        found = true;
+        break;
+      }
     }
     fclose(f);
+
   }
 
+
+  closedir(dir);
+  if (found)
+    return true;
+  else
+    return false;
 }
+
+
+
+char* check_db(const int addr){
+  FILE* f;
+  int address;
+  char db_path[strlen(getenv("HOME"))+strlen("/.config/first/db/.dat") + strlen(hashes.f_md5) + 1];
+
+  strcpy(db_path,getenv("HOME"));
+  strcat(db_path,"/.config/first/db/");
+  strcat(db_path,hashes.f_md5);
+  strcat(db_path,".dat");
+  
+  f = fopen(db_path,"r");
+  if(!f)
+    return NULL;
+
+
+  DBdata c;
+  while (fread(&c, sizeof(DBdata),1,f) > 0){
+    if(c.address == addr){
+      if(c.deleted){
+        fclose(f);
+        return NULL;
+      }
+      char* id = strdup(c.id);
+      return id;
+    }
+  }
+  fclose(f);
+  return NULL;
+}
+
+
+
+
+
+
+
+bool check_db_unknown_file(const char id[]){
+
+  char db_path[strlen(getenv("HOME"))+strlen("/.config/first/db/") + 1];
+  strcpy(db_path,getenv("HOME"));
+  strcat(db_path,"/.config/first/db/");
+
+  FILE* f;
+  DIR* dir;
+  struct dirent *dptr = NULL;
+  
+  dir = opendir(db_path);
+  if (!dir)
+    return false;
+
+  bool found = false;
+  while(!found && (dptr = readdir(dir)) != NULL){
+
+    if(!strcmp (dptr->d_name, "..") || !strcmp (dptr->d_name, "."))
+        continue;
+    char pth[strlen(db_path)+ strlen(hashes.f_md5) + 1];
+    strcpy(pth,db_path);
+    f = fopen(strcat(pth,dptr->d_name), "r+");
+    
+    if(!f)
+      continue;
+
+    DBdata c;
+    while (!found ,fread(&c, sizeof(DBdata),1,f) > 0){
+      
+      if(strcmp(c.id, id) == 0 && !c.deleted){
+        found = true;
+        break;
+      }
+    }
+    fclose(f);
+
+  }
+
+
+  closedir(dir);
+  if (found)
+    return true;
+  else
+    return false;
+}
+
+
+
+// void read_db(){
+//   FILE* f;
+//   char id[26];
+//   char db_path[strlen(getenv("HOME"))+strlen("/.config/first/db/.dat") + strlen(hashes.f_md5) + 1];
+//   if (!db_path)
+//     return;
+//   strcpy(db_path,getenv("HOME"));
+//   strcat(db_path,"/.config/first/db/");
+//   strcat(db_path,hashes.f_md5);
+//   strcat(db_path,".dat");
+
+//   if( f = fopen(db_path,"r")){
+//     DBdata c;
+//     while (fread(&c, sizeof(DBdata),1,f) > 0){
+//       printf("%s %d %d\n",c.id, c.address, c.deleted );
+//     }
+//     fclose(f);
+//   }
+
+// }
+
