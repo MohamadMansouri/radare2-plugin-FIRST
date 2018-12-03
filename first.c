@@ -28,7 +28,7 @@ static const char *help_msg_Fst[] = {
 "Fstg", "", "get annotations saved in FIRST",
 "Fstgc", "", "get all created annotations saved in FIRST (this does not depend on the opened file)",
 "Fsth", " [addr]", "get annotation history of a function",
-"Fsthh", " [addr]", "get annotation history of a function that don't exist in this file (you can see all created annotations using Fstgc)",
+"Fsthh", " [id]", "get annotation history of a function that don't exist in this file (you can see all created annotations using Fstgc)",
 "Fst+", " [addr] [id]", "apply annotations",
 "Fsts", " [func]", "scan for similar functions in FIRST",
 "Fstsa", "", "scan all functions for similar functions in FIRST",
@@ -282,10 +282,7 @@ int cmd(void *user, const char *input) {
             set_hashes(core);
             init_fst = true;
         }
-        
-    // if (!init_fcn)
-    //     if(populate_fcn(core))
-    //         init_fcn = true;
+
     if (init_fst)
         cmd_fst(core,input+3);
 

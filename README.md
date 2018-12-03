@@ -9,6 +9,10 @@ Please look below to find links to the various FIRST components.
 - Modify first.config to set the host and your FIRST token (by default it is set to connect to FIRST online server).
 - Execute `make`
 
+## Prerequisite
+- radare2
+- curl
+
 ## Usage
 	Usage: Fst[?asug]  FIRST plugin
 	| Fst               test connection to server
@@ -21,7 +25,7 @@ Please look below to find links to the various FIRST components.
 	| Fstg              get annotations saved in FIRST
 	| Fstgc             get all created annotations saved in FIRST (this does not depend on the opened file)
 	| Fsth [addr]       get annotation history of a function
-	| Fsthh [addr]      get annotation history of a function that don't exist in this file (you can see all created annotations using Fstgc)
+	| Fsthh [id]    	get annotation history of a function that don't exist in this file (you can see all created annotations using Fstgc)
 	| Fst+ [id]         apply annotations
 	| Fsts [func]       scan for similar functions in FIRST
 	| Fstsa             scan all functions for similar functions in FIRST

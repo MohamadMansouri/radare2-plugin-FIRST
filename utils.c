@@ -245,7 +245,7 @@ bool send_g(action act, char* token, char* parms, size_t callback(void *ptr, siz
 
     res = curl_easy_perform(curl);
     if(res != CURLE_OK){
-      fprintf(stderr, "failed to connect to server: %s\n",curl_easy_strerror(res));
+      fprintf(stderr, "Curl: %s\n",curl_easy_strerror(res));
       return false;
     }
     curl_easy_cleanup(curl);
@@ -318,7 +318,7 @@ void s_check_in (action act){
   jsmn_parser parser;
   jsmn_init(&parser);
 
-  if (checkedin || act == f_test)
+  if (checkedin || act == f_test || act == f_created || act == f_history)
     return; 
   else{
     char parms[strlen("md5=&crc32=&sha1=") + strlen(hashes.f_md5) + sizeof(hashes.f_crc32) + strlen(hashes.f_sha1)];
@@ -1441,7 +1441,7 @@ void do_history(const int addr){
   free(id);
   }
   else
-    r_cons_printf("ID is not identified\n");
+    r_cons_printf("Address is not identified\n");
 
 }
 
@@ -1597,7 +1597,6 @@ bool save(DBdata d){
   strcat(db_path,hashes.f_md5);
   strcat(db_path,".dat");
   
-
   if(f = fopen(db_path,"r+")){
     
     int exist = exist_in_file(f,d);
