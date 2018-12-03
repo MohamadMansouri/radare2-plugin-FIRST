@@ -6,8 +6,8 @@ Please look below to find links to the various FIRST components.
 - FIRST Integration - IDA Pro (https://github.com/vrtadmin/FIRST-plugin-ida): The source code for the FIRST IDA Pro integration. Documentation can be found in the repo or at http://first-plugin-ida.readthedocs.io
 
 ## Installation
--Modify first.config to set the host and your FIRST token (by default it is set to connect to FIRST online server).
--Execute `make`
+- Modify first.config to set the host and your FIRST token (by default it is set to connect to FIRST online server).
+- Execute `make`
 
 ## Usage
 	Usage: Fst[?asug]  FIRST plugin
