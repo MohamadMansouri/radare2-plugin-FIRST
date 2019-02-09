@@ -1,6 +1,6 @@
 # FIRST-radare2-plugin
 This is a radare2 core plugin.
-It purpose is to make radare2 integrates with FIRST (Function Identification and Recovery Signature Tool) server.
+It aims to make radare2 integrates with FIRST (Function Identification and Recovery Signature Tool) server.
 
 Please look below to find links to the various FIRST components.
 - FIRST server (https://github.com/vrtadmin/FIRST-server): The source code for the FIRST server component. Documentaiton can be found in the repo or at http://first-server.readthedocs.io
