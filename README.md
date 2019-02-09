@@ -1,5 +1,6 @@
-# First-radare2-plugin
-This is a radare2 plugin that ads a cmd that integrates with FIRST (Function Identification and Recovery Signature Tool) server.
+# FIRST-radare2-plugin
+This is a radare2 core plugin.
+It purpose is to make radare2 integrates with FIRST (Function Identification and Recovery Signature Tool) server.
 
 Please look below to find links to the various FIRST components.
 - FIRST server (https://github.com/vrtadmin/FIRST-server): The source code for the FIRST server component. Documentaiton can be found in the repo or at http://first-server.readthedocs.io
@@ -9,7 +10,7 @@ Please look below to find links to the various FIRST components.
 - Modify first.config to set the host and your FIRST token (by default it is set to connect to FIRST online server).
 - Execute `make`
 
-## Prerequisite
+## Requirments
 - radare2
 - curl
 
@@ -25,7 +26,7 @@ Please look below to find links to the various FIRST components.
 	| Fstg              get annotations saved in FIRST
 	| Fstgc             get all created annotations saved in FIRST (this does not depend on the opened file)
 	| Fsth [addr]       get annotation history of a function
-	| Fsthh [id]    	get annotation history of a function that don't exist in this file (you can see all created annotations using Fstgc)
-	| Fst+ [id]         apply annotations
+	| Fsthh [id]        get annotation history of a function that don't exist in this file (you can see all created annotations using Fstgc)
+	| Fst+ [addr] [id]  apply annotations
 	| Fsts [func]       scan for similar functions in FIRST
 	| Fstsa             scan all functions for similar functions in FIRST
