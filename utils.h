@@ -101,18 +101,17 @@ typedef struct DBdata
 
 
 // communication with server
-bool send_g(action act, char* token, char* parms, size_t callback(void *ptr, size_t size, size_t nmemb, void *stream));
-bool send_p(action act, char* token, char* parms, size_t callback(void *ptr, size_t size, size_t nmemb, void *stream));
+static bool send_g(action act, char* token, char* parms, size_t callback(void *ptr, size_t size, size_t nmemb, void *stream));
+static bool send_p(action act, char* token, char* parms, size_t callback(void *ptr, size_t size, size_t nmemb, void *stream));
 bool s_test_connection();
-void s_check_in(action act);
-bool s_add(Metadata metadata[], int size, char* arch);	
-bool s_scan(Metadata metadata[], int size, char* arch );
-bool s_history(const char** metadata_id, int size);
-void s_get(char** metadata_id, int* address, int size, MetadataServer* m);
-void s_applied(const char* metadata_id);
-bool s_unapplied(char* metadata_id);
-bool s_delete(const char* metadata_id);
-RespCreated s_created();
+static void s_check_in(action act);
+static bool s_add(Metadata metadata[], int size, char* arch);	
+static bool s_scan(Metadata metadata[], int size, char* arch );
+static bool s_history(const char** metadata_id, int size);
+static void s_get(char** metadata_id, int* address, int size, MetadataServer* m);
+static void s_applied(const char* metadata_id);
+static bool s_unapplied(char* metadata_id);
+static bool s_delete(const char* metadata_id);
 
 
 
@@ -122,16 +121,15 @@ RespCreated s_created();
 
 
 // setter and getters
-bool  f_set_config();
-void set_token();
+bool f_set_config();
 void set_hashes(RCore *core);
-char* get_token();
-char* get_arch(RCore* core);
-char* get_signature(RCore* core, const RAnalFunction* fcn);
-char** get_apis(RCore* core, RAnalFunction* fcn, int* size);
-char* get_prototype(RCore *core , RAnalFunction *fcn);
-char* get_comment(RCore* core, RAnalFunction *fcn);
-bool set_comment(RCore* core, RAnalFunction *fcn, const char* comment);
+static char* get_token();
+static char* get_arch(RCore* core);
+static char* get_signature(RCore* core, const RAnalFunction* fcn);
+static char** get_apis(RCore* core, RAnalFunction* fcn, int* size);
+static char* get_prototype(RCore *core , RAnalFunction *fcn);
+static char* get_comment(RCore* core, RAnalFunction *fcn);
+static bool set_comment(RCore* core, RAnalFunction *fcn, const char* comment);
 
 
 
@@ -143,7 +141,6 @@ bool do_add(RCore *core,RAnalFunction *fcn);
 bool do_scan(RCore *core,RAnalFunction *fcn);
 bool do_add_all(RCore* core, RList* fcns, const char* comm);
 bool do_scan_all(RCore* core, RList* fcns);
-bool populate_fcn(RCore* core);
 void do_get();
 void do_delete(RCore* core, const int addr);
 void do_delete_id(const char* id);
@@ -158,11 +155,11 @@ void do_apply(RCore* core, const char* id, int addr);
 
 
 //DB
-bool save(DBdata d);
-int exist_in_file(FILE* f, DBdata d);
-void read_db();
-char* delete_db(const int addr);
-bool delete_db_unknown_file(const char id[]);
-char* check_db(const int addr);
-bool check_db_unknown_file(const char id[]);
+static bool save(DBdata d);
+static int exist_in_file(FILE* f, DBdata d);
+static void read_db();
+static char* delete_db(const int addr);
+static bool delete_db_unknown_file(const char id[]);
+static char* check_db(const int addr);
+static bool check_db_unknown_file(const char id[]);
 #endif

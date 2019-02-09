@@ -52,7 +52,7 @@ int cmd_fst(RCore* core, const char *input) {
             RList* fcns = core->anal->fcns;
             if(fcns){
                 eprintf("Adding %d functions to FIRST\n", fcns->length);
-                if (input[2] == 'c' && input[3] == ' ' && input[4] != '\0' ){
+                if (input[2] == 'c' && input[3] == ' '){
                     do_add_all(core,fcns, input + 4 );
                     break;
                 }
@@ -101,6 +101,7 @@ int cmd_fst(RCore* core, const char *input) {
 
             eprintf("Adding function %s of address 0x%08x\n",fcn->name, fcn->addr);
             do_add(core, fcn);
+
             break;
         }
         default:

@@ -17,14 +17,15 @@ static bool checkedin= false;
 binary_info hashes;
 const char* path[10] = {"api/test_connection", "api/sample/checkin","api/metadata/add","api/metadata/history","api/metadata/applied","api/metadata/unapplied","api/metadata/delete","api/metadata/created","api/metadata/get","api/metadata/scan"};
 CURL *curl;
-char* response = NULL;
+static char* response = NULL;
 
 
 
 
 
 
-static int jsoneq(const char *json, jsmntok_t *tok, const char *s) {
+static 
+int jsoneq(const char *json, jsmntok_t *tok, const char *s) {
   if (tok->type == JSMN_STRING && (int) strlen(s) == tok->end - tok->start &&
       strncmp(json + tok->start, s, tok->end - tok->start) == 0) {
     return 0;
@@ -32,6 +33,7 @@ static int jsoneq(const char *json, jsmntok_t *tok, const char *s) {
   return -1;
 }
 
+static
 char* print_repeater(char a[],int n){
   for (int i = 0; i < n; ++i){
       a[i] = '_';
@@ -40,7 +42,7 @@ char* print_repeater(char a[],int n){
   return a;
 }
 
-
+static
 char* parse_time(char a[]){
   a[10] = ' ';  
   for (int i = 19; i > 11; --i){
@@ -52,6 +54,7 @@ char* parse_time(char a[]){
   return a;
 }
 
+static
 void print_line(int n){
   for (int i = 0; i < n; ++i){
     r_cons_printf("_");
@@ -107,6 +110,7 @@ int debug_response(CURL *handle, curl_infotype type,
   return 0;
 }
 
+static
 bool dump_created_metadata(char* r, jsmntok_t* t, int j, RespCreated* resp_created){
   for(int i=1;i<=(t->size)*2;i+=2){
 
@@ -172,6 +176,8 @@ bool dump_created_metadata(char* r, jsmntok_t* t, int j, RespCreated* resp_creat
   }
   return true;     
 }
+
+static
 RespCreated* dump_created(char* r, jsmntok_t* t){
   int i=1;
   if (!jsoneq(r, t+i, "failed") && (t+i+1)->type == JSMN_PRIMITIVE && *(r+(t+i+1)->start) == 'f'){
@@ -182,9 +188,9 @@ RespCreated* dump_created(char* r, jsmntok_t* t){
     resp_created->size = 0;
     if (!jsoneq(r, t+i, "pages") && (t+i+1)->type == JSMN_PRIMITIVE ){
       int size = (t+i+1)->end - (t+i+1)->start;
-      char* pages = (char*) malloc(size);
+      char pages[size + 1];
       strncpy(pages,r+(t+i+1)->start,size);
-      memset(pages+size, '\0',1);
+      pages[size] = 0;
       resp_created->pages= atoi(pages);
       i+=4;
       if (!jsoneq(r, t+i, "results") && (t+i+1)->type == JSMN_ARRAY && (t+i+1)->size){
@@ -218,7 +224,7 @@ size_t data_callback(void *ptr, size_t size, size_t nmemb, void *stream){
   return size*nmemb;
 }
 
-
+static
 bool send_g(action act, char* token, char* parms, size_t callback(void *ptr, size_t size, size_t nmemb, void *stream))
 {
   s_check_in(act);
@@ -255,6 +261,7 @@ bool send_g(action act, char* token, char* parms, size_t callback(void *ptr, siz
   return true;
 }
 
+static
 bool send_p(action act, char* token, char* parms, size_t callback(void *ptr, size_t size, size_t nmemb, void *stream)){
     
     s_check_in(act);
@@ -313,6 +320,7 @@ bool s_test_connection(){
 
 } 
 
+static
 void s_check_in (action act){
   jsmntok_t token[5];
   jsmn_parser parser;
@@ -357,6 +365,7 @@ void s_check_in (action act){
   }
 }
 
+static
 bool s_history(const char** metadata_id, int size){ 
   char parms[strlen("metadata=[]") + 27*size + (size-1)];
   char tmp[28];
@@ -446,6 +455,7 @@ bool s_history(const char** metadata_id, int size){
 
 }
 
+static
 void s_get(char** metadata_id,int* address, int size, MetadataServer* m){
   char parms[strlen("metadata=[]") + 27*size + (size-1)];
   char tmp[28];
@@ -556,7 +566,7 @@ void s_get(char** metadata_id,int* address, int size, MetadataServer* m){
 }
 
   
-
+static
 bool s_add(Metadata metadata[], int size, char* arch){
   int ntoken = 5 + size*2;
   jsmntok_t token[ntoken];
@@ -610,6 +620,7 @@ bool s_add(Metadata metadata[], int size, char* arch){
       functions = realloc(functions, as+5);
       strcpy(functions, at);
       free(at);
+      free(apis);
     }      
       
     l = snprintf(NULL,0,parms,functions);
@@ -678,6 +689,7 @@ if (!response){
 
 }
 
+static
 bool s_scan(Metadata metadata[], int size, char* arch ){
   int MAX_scan = 20;
   int MAX_engines = 10;
@@ -731,6 +743,7 @@ bool s_scan(Metadata metadata[], int size, char* arch ){
       functions = realloc(functions, as+5);
       strcpy(functions, at);
       free(at);
+      free(apis);
     }      
       
     l = snprintf(NULL,0,parms,functions);
@@ -887,7 +900,7 @@ if (!response){
 
 
 
-
+static
 void s_applied(const char* metadata_id){
   int ntoken = 5;
   jsmntok_t token[ntoken];
@@ -902,6 +915,7 @@ void s_applied(const char* metadata_id){
 
 }
 
+static
 bool s_unapplied(char* metadata_id){
   int ntoken = 5;
   jsmntok_t token[ntoken];
@@ -930,7 +944,7 @@ bool s_unapplied(char* metadata_id){
   return false;
 }
 
-
+static
 bool s_delete(const char* metadata_id){
 
   int ntoken = 5;
@@ -967,29 +981,6 @@ bool s_delete(const char* metadata_id){
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 //setters and getters
 static int handler(void* user, const char* section, const char* name,
                    const char* value)
@@ -1018,8 +1009,7 @@ static int handler(void* user, const char* section, const char* name,
 
 bool f_set_config() 
 {
-  char *homedir = NULL;
-  homedir = (char*)malloc(strlen(getenv("HOME"))+strlen("/.config/first/first.config"));
+  char homedir[strlen(getenv("HOME"))+strlen("/.config/first/first.config") + 1];
   strcpy(homedir,getenv("HOME"));
   
   DIR* dir;
@@ -1027,7 +1017,7 @@ bool f_set_config()
   dir = opendir(strcat(homedir,"/.config/first"));
 
   if (!dir){
-    printf("Can't load configuration file!\n");
+    eprintf("Can't load configuration file!\n");
     return false;
   }
   closedir(dir);
@@ -1057,16 +1047,18 @@ void set_hashes(RCore *core)
   crc32 = r_hash_crc_preset (buf, buf_len,CRC_PRESET_32);
   hashes.f_crc32 = (int)crc32;
   hashes.f_sha256 = "";
+  if(buf)
+    free(buf);
   return;
 }
 
 
-
+static
 char* get_token(){
   return f_server_config._api_key;
 }
 
-
+static
 char* get_arch(RCore* core){
   char bits[3] = "32";
   char* arch = NULL;
@@ -1103,6 +1095,7 @@ char* get_arch(RCore* core){
   return NULL;
 }
 
+static 
 char* get_signature(RCore* core, const RAnalFunction* fcn){
   if(!fcn)
     return NULL;
@@ -1113,7 +1106,7 @@ char* get_signature(RCore* core, const RAnalFunction* fcn){
   return result;
 }
 
-
+static 
 char** get_apis(RCore* core, RAnalFunction* fcn, int* size){
   if (!fcn)
     return NULL;
@@ -1166,8 +1159,10 @@ char** get_apis(RCore* core, RAnalFunction* fcn, int* size){
       break;
       }
   }
-    
-
+  if(refs)
+    free(refs);
+  if(refi)
+    free(refi);
 
   for (int j = 0; j < imp_size; ++j)
     if (imports[j])
@@ -1182,6 +1177,7 @@ char** get_apis(RCore* core, RAnalFunction* fcn, int* size){
   return apis;
 }
 
+static 
 char* get_prototype(RCore *core, RAnalFunction *fcn){
   if (!fcn)
     return NULL;
@@ -1192,6 +1188,7 @@ char* get_prototype(RCore *core, RAnalFunction *fcn){
   return result;
 }
 
+static 
 char* get_comment(RCore *core, RAnalFunction *fcn){
   char cmd[15];
   sprintf(cmd, "CC. 0x%08x",fcn->addr); 
@@ -1200,7 +1197,7 @@ char* get_comment(RCore *core, RAnalFunction *fcn){
   return result;
 }
 
-
+static 
 bool set_comment(RCore *core, RAnalFunction *fcn, const char* comment){
   if (!comment)
     return false;
@@ -1209,15 +1206,6 @@ bool set_comment(RCore *core, RAnalFunction *fcn, const char* comment){
   sprintf(cmd, "CC %s @0x%08x",comment,fcn->addr);
   return r_core_cmd0(core, cmd);
 }
-
-
-
-
-
-
-
-
-
 
 
 
@@ -1237,11 +1225,25 @@ bool do_add(RCore* core, RAnalFunction *fcn){
   
   Metadata metadata[1];
   metadata[0] = m;
-  s_add(metadata,1, get_arch(core)); 
+  char* arch = get_arch(core);
+  s_add(metadata,1, arch); 
   r_cons_printf("Done\n");
+  
   for (int i = 0; i < size; ++i)
-    free(m.apis[i]);
-  free(m.apis);
+    if(m.apis[i])
+      free(m.apis[i]);
+  if(m.apis)
+    free(m.apis);
+  if(m.prototype)
+    free(m.prototype);
+  if(m.comment)
+    free(m.comment);
+  if(m.signature)
+    free(m.signature);
+  if(arch)
+    free(arch);
+  if(opcodes)
+    free(opcodes);
 }
 
 
@@ -1260,22 +1262,28 @@ bool do_add_all(RCore* core, RList* fcns, const char* comm){
     if (!comm)
       m.comment = get_comment(core, fcn);
     else{
-      char comment[strlen(get_comment(core, fcn)) + strlen(comm) + 3];
-      strcpy(comment, get_comment(core, fcn));
+      char* cmnt = get_comment(core, fcn);
+      char comment[strlen(cmnt) + strlen(comm) + 3];
+      strcpy(comment, cmnt);
       strcat(comment, " ");
       strcat(comment, comm);
       m.comment = strdup(comment);
+      if(cmnt)
+        free(cmnt);
     }
     int size = 0;
     m.apis = get_apis(core, fcn, &size);
     m.apis_size = size;
     
     metadata[i++] = m;
-    // make max 20  
+    if(opcodes)
+      free(opcodes);
   }
   int j = 0;
+  char* arch = get_arch(core);
+    // make max 20  
   while (i > 0){
-    s_add(&metadata[j], i > 19? 20 : i ,get_arch(core));
+    s_add(&metadata[j], i > 19? 20 : i ,arch);
     j += 20;
     i -= 20;
   }
@@ -1284,9 +1292,20 @@ bool do_add_all(RCore* core, RList* fcns, const char* comm){
 
   for (int i=0; i < fcns->length; ++i){
     for (int j = 0; j < metadata[i].apis_size ; ++j)
-      free(metadata[i].apis[j]);
-    free(metadata[i].apis);
+      if(metadata[i].apis[j])
+        free(metadata[i].apis[j]);
+    if(metadata[i].apis)
+      free(metadata[i].apis);
+    if(metadata[i].prototype)
+      free(metadata[i].prototype);
+    if(metadata[i].comment)
+      free(metadata[i].comment);
+    if(metadata[i].signature)
+      free(metadata[i].signature);
   }
+  if(arch)
+    free(arch);
+
 }
 
 
@@ -1301,10 +1320,19 @@ bool do_scan(RCore* core, RAnalFunction *fcn){
   
   Metadata metadata[1];
   metadata[0] = m;
-  s_scan(metadata,1, get_arch(core)); 
+  char* arch = get_arch(core);
+  s_scan(metadata,1, arch); 
   for (int i = 0; i < size; ++i)
-    free(m.apis[i]);
-  free(m.apis);
+    if(m.apis[i])
+      free(m.apis[i]);
+  if(m.apis)
+    free(m.apis);
+  if(m.signature)
+    free(m.signature);
+  if(arch)
+    free(arch);
+  if(opcodes)
+    free(opcodes);
 }
 
 
@@ -1323,11 +1351,14 @@ bool do_scan_all(RCore* core, RList* fcns){
     m.apis_size = size;
     
     metadata[i++] = m;
-    // make max 20  
+    if(opcodes)
+      free(opcodes);
   }
   int j = 0;
+  char* arch = get_arch(core);
+    // make max 20      
   while (i > 0){
-    s_scan(&metadata[j], i > 19? 20 : i ,get_arch(core));
+    s_scan(&metadata[j], i > 19? 20 : i , arch);
     j += 20;
     i -= 20;
   }
@@ -1335,9 +1366,16 @@ bool do_scan_all(RCore* core, RList* fcns){
 
   for (int i=0; i < fcns->length; ++i){
     for (int j = 0; j < metadata[i].apis_size ; ++j)
-      free(metadata[i].apis[j]);
-    free(metadata[i].apis);
+      if(metadata[i].apis[j])
+        free(metadata[i].apis[j]);
+    if(metadata[i].apis)
+      free(metadata[i].apis);
+    if(metadata[i].signature)
+      free(metadata[i].signature);
   }
+  if(arch)
+    free(arch);
+
 }
 
 
@@ -1345,10 +1383,9 @@ bool do_scan_all(RCore* core, RList* fcns){
 
 void do_get(){
   FILE* f;
-  char *db_path = NULL;
+  char db_path[strlen(getenv("HOME"))+strlen("/.config/first/db/.dat") + strlen(hashes.f_md5) + 1];
   int address;
   char id[26];
-  db_path = (char*)malloc(strlen(getenv("HOME"))+strlen("/.config/first/db/.dat") + strlen(hashes.f_md5) + 1);
   if (!db_path)
     return;
   strcpy(db_path,getenv("HOME"));
@@ -1386,6 +1423,13 @@ void do_get(){
       j += 20;
       i -= 20;
     }
+    for (int k = 0; k < j+i; k++ )
+      if(mid[k])
+        free(mid[k]);
+    if(addr)
+      free(addr);
+    if(mid)
+      free(mid);
 
   }
 
@@ -1406,7 +1450,7 @@ void do_delete(RCore* core,const int addr){
       r_cons_printf("Annotations of function %s of address 0x%08x are deleted\n", fcn->name, fcn->addr);
     else 
       r_cons_printf("Annotations of function of address 0x%08x are deleted\n", addr);
-    free(id);
+      free(id);
     return;
   }
   if(id)
@@ -1574,7 +1618,7 @@ void do_apply(RCore* core,const char* id, int addr){
 
     s_applied(id);
 
-    delete_db(addr);
+    char* id = delete_db(addr);
     
     DBdata d;
     strncpy(d.id, id,25);
@@ -1583,12 +1627,17 @@ void do_apply(RCore* core,const char* id, int addr){
     d.deleted = false;
     save(d);
     r_cons_printf("Annotations applied to function of address 0x%08x\n", addr);
+    if(id)
+      free(id);
   }
 
 
 }
 
 
+
+//DB operations
+static 
 bool save(DBdata d){
   FILE* f;
   char db_path[strlen(getenv("HOME"))+strlen("/.config/first/db/.dat") + strlen(hashes.f_md5) + 1];
@@ -1628,7 +1677,7 @@ first_beach:
 }
 
 
-
+static 
 int exist_in_file(FILE* f, DBdata d){
   if (!f)
     return false;
@@ -1648,7 +1697,7 @@ int exist_in_file(FILE* f, DBdata d){
 
 
 
-
+static 
 char* delete_db(const int addr){
   FILE* f;
   char db_path[strlen(getenv("HOME"))+strlen("/.config/first/db/.dat") + strlen(hashes.f_md5) + 1];
@@ -1686,7 +1735,7 @@ char* delete_db(const int addr){
 
 
 
-
+static 
 bool delete_db_unknown_file(const char id[]){
 
   char db_path[strlen(getenv("HOME"))+strlen("/.config/first/db/") + 1];
@@ -1738,7 +1787,7 @@ bool delete_db_unknown_file(const char id[]){
 }
 
 
-
+static 
 char* check_db(const int addr){
   FILE* f;
   int address;
@@ -1774,7 +1823,7 @@ char* check_db(const int addr){
 
 
 
-
+static 
 bool check_db_unknown_file(const char id[]){
 
   char db_path[strlen(getenv("HOME"))+strlen("/.config/first/db/") + 1];
