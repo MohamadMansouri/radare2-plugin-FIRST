@@ -1069,6 +1069,10 @@ char* get_arch(RCore* core){
   if(bin){
     if (bin->bits == 64)
       strcpy(bits,"64");
+    if(!bin->arch)
+      arch = malloc(1);
+      *arch = 0;
+      return arch;
     arch = malloc(strlen(bin->arch)+2);
     if (!arch)
       return NULL;
@@ -1639,6 +1643,10 @@ void do_apply(RCore* core,const char* id, int addr){
 //DB operations
 static 
 bool save(DBdata d){
+
+  if( strlen(hashes.f_md5) == 0)
+    return false;
+
   FILE* f;
   char db_path[strlen(getenv("HOME"))+strlen("/.config/first/db/.dat") + strlen(hashes.f_md5) + 1];
   strcpy(db_path,getenv("HOME"));
@@ -1699,6 +1707,10 @@ int exist_in_file(FILE* f, DBdata d){
 
 static 
 char* delete_db(const int addr){
+  
+  if( strlen(hashes.f_md5) == 0)
+    return NULL;
+
   FILE* f;
   char db_path[strlen(getenv("HOME"))+strlen("/.config/first/db/.dat") + strlen(hashes.f_md5) + 1];
   strcpy(db_path,getenv("HOME"));
@@ -1755,7 +1767,7 @@ bool delete_db_unknown_file(const char id[]){
 
     if(!strcmp (dptr->d_name, "..") || !strcmp (dptr->d_name, "."))
         continue;
-    char pth[strlen(db_path)+ strlen(hashes.f_md5) + 1];
+    char pth[strlen(db_path)+ 33];
     strcpy(pth,db_path);
     f = fopen(strcat(pth,dptr->d_name), "r+");
     
@@ -1789,6 +1801,10 @@ bool delete_db_unknown_file(const char id[]){
 
 static 
 char* check_db(const int addr){
+  
+  if( strlen(hashes.f_md5) == 0)
+    return NULL;
+
   FILE* f;
   int address;
   char db_path[strlen(getenv("HOME"))+strlen("/.config/first/db/.dat") + strlen(hashes.f_md5) + 1];
@@ -1843,7 +1859,7 @@ bool check_db_unknown_file(const char id[]){
 
     if(!strcmp (dptr->d_name, "..") || !strcmp (dptr->d_name, "."))
         continue;
-    char pth[strlen(db_path)+ strlen(hashes.f_md5) + 1];
+    char pth[strlen(db_path)+ 33];
     strcpy(pth,db_path);
     f = fopen(strcat(pth,dptr->d_name), "r+");
     
@@ -1864,10 +1880,7 @@ bool check_db_unknown_file(const char id[]){
 
 
   closedir(dir);
-  if (found)
-    return true;
-  else
-    return false;
+  return found;
 }
 
 
