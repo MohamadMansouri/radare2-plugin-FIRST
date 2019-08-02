@@ -99,7 +99,7 @@ int cmd_fst(RCore* core, const char *input) {
                 }
             }
 
-            eprintf("Adding function %s of address 0x%08x\n",fcn->name, fcn->addr);
+            eprintf("Adding function %s of address 0x%08llx\n",fcn->name, fcn->addr);
             do_add(core, fcn);
 
             break;
@@ -175,7 +175,7 @@ int cmd_fst(RCore* core, const char *input) {
                 }
             }
 
-            eprintf("Scanning for similar functions of %s of address 0x%08x\n",fcn->name, fcn->addr);
+            eprintf("Scanning for similar functions of %s of address 0x%08llx\n",fcn->name, fcn->addr);
             do_scan(core, fcn);
             break;
         }

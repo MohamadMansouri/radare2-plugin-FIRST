@@ -66,7 +66,7 @@ static
 void dump(const char *text,
 FILE *stream, unsigned char *ptr, size_t size)
 {
-  fprintf(stream, "%s, %d bytes\n",text, (long)size, (long)size);
+  fprintf(stream, "%s, %ld bytes\n",text, (long)size);
   printf("%s\n", ptr);
   
 }
@@ -574,7 +574,7 @@ bool s_add(Metadata metadata[], int size, char* arch){
   jsmn_init(&parser);
   // r_cons_printf("The following functions will be added:\n");
 
-  int l = snprintf(NULL,0, "md5=%s&crc32=%d&functions={%s}", hashes.f_md5, hashes.f_crc32);
+  int l = snprintf(NULL,0, "md5=%s&crc32=%d&functions={%s}", hashes.f_md5, hashes.f_crc32,"%s");
   char* parms = malloc(l+1);
   if(!parms )
     return false;
@@ -698,7 +698,7 @@ bool s_scan(Metadata metadata[], int size, char* arch ){
   jsmn_parser parser;
   jsmn_init(&parser);
 
-  int l = snprintf(NULL,0, "md5=%s&crc32=%d&functions={%s}", hashes.f_md5, hashes.f_crc32);
+  int l = snprintf(NULL,0, "md5=%s&crc32=%d&functions={%s}", hashes.f_md5, hashes.f_crc32,"%s");
   char* parms = malloc(l+1);
   if(!parms )
     return false;
@@ -1069,10 +1069,11 @@ char* get_arch(RCore* core){
   if(bin){
     if (bin->bits == 64)
       strcpy(bits,"64");
-    if(!bin->arch)
+    if(!bin->arch){
       arch = malloc(1);
       *arch = 0;
       return arch;
+    }
     arch = malloc(strlen(bin->arch)+2);
     if (!arch)
       return NULL;
@@ -1103,8 +1104,8 @@ static
 char* get_signature(RCore* core, const RAnalFunction* fcn){
   if(!fcn)
     return NULL;
-  char address[18];
-  sprintf(address,"p8 $FS @0x%08x", fcn->addr);
+  char address[20];
+  sprintf(address,"p8 $FS @0x%08llx", fcn->addr);
   char* result = r_core_cmd_str(core,address);
   result[strlen(result)-1]='\0';
   return result;
@@ -1195,7 +1196,7 @@ char* get_prototype(RCore *core, RAnalFunction *fcn){
 static 
 char* get_comment(RCore *core, RAnalFunction *fcn){
   char cmd[15];
-  sprintf(cmd, "CC. 0x%08x",fcn->addr); 
+  sprintf(cmd, "CC. 0x%08llx",fcn->addr); 
   char* result = r_core_cmd_str(core, cmd);
   result[strlen(result)-1]='\0';
   return result;
@@ -1207,7 +1208,7 @@ bool set_comment(RCore *core, RAnalFunction *fcn, const char* comment){
     return false;
 
   char cmd[16 + strlen(comment)];
-  sprintf(cmd, "CC %s @0x%08x",comment,fcn->addr);
+  sprintf(cmd, "CC %s @0x%08llx",comment,fcn->addr);
   return r_core_cmd0(core, cmd);
 }
 
@@ -1530,7 +1531,7 @@ void do_created(){
     jsmn_parser parser;
     jsmn_init(&parser);
 
-    char parms[5];
+    char parms[12];
     parms[0] = '/';
     sprintf(parms+1, "%d", page);
 
@@ -1599,7 +1600,7 @@ void do_apply(RCore* core,const char* id, int addr){
   s_get(mid,NULL,1,&m);
   if (m.comment || m.name || m.prototype){
 
-    char cmd[100];
+    char cmd[120];
     if (m.comment){
       sprintf(cmd, "CCu %.80s @ 0x%08x", m.comment, addr); 
       r_core_cmd0(core, cmd);
@@ -1607,7 +1608,7 @@ void do_apply(RCore* core,const char* id, int addr){
     }
     
     if (m.name){
-      sprintf(cmd, "afn %.80s @ 0x%08x\0", m.name, addr); 
+      sprintf(cmd, "afn %.80s @ 0x%08x", m.name, addr); 
       r_core_cmd0(core, cmd);
       free(m.name);
 
