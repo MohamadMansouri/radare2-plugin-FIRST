@@ -13,7 +13,7 @@ TARGET=$(PLUGNAME).$(LIBEXT)
 
 
 all:
-	$(CC) $(CFLAGS) $(LDFLAGS) -g -O3 -shared -fPIC -Wno-discarded-qualifiers utils.c first.c jsmn.c ini.c -o first.$(LIBEXT)
+	$(CC) $(CFLAGS) -g -O3 -shared -fPIC -Wno-discarded-qualifiers utils.c first.c jsmn.c ini.c -o first.$(LIBEXT) $(LDFLAGS)
 	$(MAKE) install
 
 .PHONY : install
