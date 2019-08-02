@@ -244,7 +244,9 @@ bool send_g(action act, char* token, char* parms, size_t callback(void *ptr, siz
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
     curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "Mozilla/5.0");
+    // TODO: contact FIRST developers to make specific agent for this plugin
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)\
+     Chrome/74.0.3729.169 Safari/537.36");
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, callback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&act);
     curl_easy_setopt(curl, CURLOPT_PORT, f_server_config._port);
@@ -277,7 +279,8 @@ bool send_p(action act, char* token, char* parms, size_t callback(void *ptr, siz
     // curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
     // curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION,debug_response);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, parms);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "Mozilla/5.0");
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)\
+     Chrome/74.0.3729.169 Safari/537.36");
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, callback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&act);
     curl_easy_setopt(curl, CURLOPT_PORT, f_server_config._port);
@@ -301,7 +304,6 @@ bool s_test_connection(){
   if(!send_g(f_test,f_server_config._api_key,NULL,data_callback))
     return false;
   if(response != NULL){
-    
     int r = jsmn_parse(&parser, response, strlen(response), token, 3);
     
     if (r !=3 || token[0].type != JSMN_OBJECT){
@@ -1032,9 +1034,31 @@ bool f_set_config()
 
 void set_hashes(RCore *core)
 {
+  RBinInfo* bin = NULL;
+  bin = r_bin_get_info(core->bin);
+  hashes.f_md5 = NULL;
+  hashes.f_sha1 = NULL;
 
-  hashes.f_md5 = (char* )r_config_get(core->config, "file.md5");
-  hashes.f_sha1 = (char* )r_config_get(core->config, "file.sha1");;
+  if (bin){
+    RListIter *iter; 
+    RBinFileHash *hash; 
+    r_list_foreach (bin->file_hashes, iter, hash) {
+      if (!strcmp(hash->type, "md5"))
+        hashes.f_md5 = hash->hex;
+      if (!strcmp(hash->type, "sha1"))
+        hashes.f_sha1 = hash->hex;
+    }
+  }
+
+  if (!hashes.f_md5)
+    hashes.f_md5 = "";
+
+  if (!hashes.f_sha1)
+    hashes.f_sha1 = "";
+
+
+  // hashes.f_md5 = (char* )r_config_get(core->config, "file.md5");
+  // hashes.f_sha1 = (char* )r_config_get(core->config, "file.sha1");;
 
   ut64 crc32;
   ut8 *buf = NULL;
