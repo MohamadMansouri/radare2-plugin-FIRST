@@ -1,4 +1,4 @@
-# FIRST-plugin-radare2
+# radare2-plugin-FIRST
 This is a radare2 core plugin.
 It aims to make radare2 integrates with FIRST (Function Identification and Recovery Signature Tool) server.
 
